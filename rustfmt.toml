@@ -15,26 +15,12 @@
 # specific language governing permissions and limitations
 # under the License.
 
-[package]
-description = "fuse3 integration for Apache OpenDAL"
-name = "fuse3_opendal"
-
-authors = ["Apache OpenDAL <dev@opendal.apache.org>"]
 edition = "2024"
-homepage = "https://opendal.apache.org/"
-license = "Apache-2.0"
-repository = "https://github.com/apache/opendal"
-rust-version = "1.85"
-version = "0.0.19"
+reorder_imports = true
 
-[dependencies]
-bytes = "1.6.0"
-fuse3 = { version = "0.8.1", "features" = ["tokio-runtime", "unprivileged"] }
-futures-util = "0.3.30"
-libc = "0.2.155"
-log = "0.4.21"
-opendal = { version = "0.54.0" }
-sharded-slab = "0.1.7"
-tokio = "1.38.0"
-
-[dev-dependencies]
+# format_code_in_doc_comments = true
+# group_imports = "StdExternalCrate"
+# imports_granularity = "Item"
+# overflow_delimited_expr = true
+# trailing_comma = "Vertical"
+# where_single_line = true
