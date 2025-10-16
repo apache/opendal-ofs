@@ -26,6 +26,9 @@ github:
     - s3
     - fs
     - cli
+  features:
+    issues: true
+    discussions: true
   enabled_merge_buttons:
     squash: true
     merge: false
