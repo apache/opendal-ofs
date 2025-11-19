@@ -1291,18 +1291,20 @@ checksum = "a4895175b425cb1f87721b59f0f286c2092bd4af812243672510e1ac53e2e0ad"
 [[package]]
 name = "opendal"
 version = "0.54.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "42afda58fa2cf50914402d132cc1caacff116a85d10c72ab2082bb7c50021754"
 dependencies = [
  "anyhow",
  "backon",
  "base64",
  "bytes",
+ "chrono",
  "crc32c",
  "dotenvy",
  "futures",
  "getrandom 0.2.16",
  "http",
  "http-body",
- "jiff",
  "log",
  "md-5",
  "percent-encoding",

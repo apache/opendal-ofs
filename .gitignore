@@ -1,0 +1,8 @@
+# Build artifacts
+/target
+
+# Editor or OS clutter
+.DS_Store
+
+# Backup files created by rustfmt or editors
+**/*.rs.bk

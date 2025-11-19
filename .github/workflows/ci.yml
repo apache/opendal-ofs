@@ -33,7 +33,7 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  check_clippy:
+  check_clippy_and_test:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5

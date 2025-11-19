@@ -17,8 +17,10 @@
 
 use std::sync::OnceLock;
 
-use opendal::Capability;
 use opendal::raw::tests;
+use opendal::services;
+use opendal::Capability;
+use opendal::Operator;
 use tempfile::TempDir;
 use test_context::TestContext;
 use tokio::runtime::Runtime;
@@ -30,6 +32,9 @@ static RUNTIME: OnceLock<Runtime> = OnceLock::new();
 #[cfg(any(target_os = "linux", target_os = "freebsd"))]
 pub struct OfsTestContext {
     pub mount_point: TempDir,
+    // Keep backend root alive for the fs-based fallback backend.
+    #[allow(dead_code)]
+    backend_root: Option<TempDir>,
     // This is a false positive, the field is used in the test.
     #[allow(dead_code)]
     pub capability: Capability,
@@ -39,9 +44,19 @@ pub struct OfsTestContext {
 #[cfg(any(target_os = "linux", target_os = "freebsd"))]
 impl TestContext for OfsTestContext {
     fn setup() -> Self {
+        let mut backend_root = None;
         let backend = tests::init_test_service()
             .expect("init test services failed")
-            .expect("no test services has been configured");
+            .unwrap_or_else(|| {
+                let tmp_root = tempfile::tempdir().expect("create temporary backend root");
+                let root_path = tmp_root.path().to_string_lossy().to_string();
+                let fs = services::Fs::default().root(&root_path);
+                let backend = Operator::new(fs)
+                    .expect("build fallback fs operator")
+                    .finish();
+                backend_root = Some(tmp_root);
+                backend
+            });
         let capability = backend.info().full_capability();
 
         INIT_LOGGER.get_or_init(|| logforth::starter_log::stderr().apply());
@@ -74,6 +89,7 @@ impl TestContext for OfsTestContext {
 
         OfsTestContext {
             mount_point,
+            backend_root,
             capability,
             mount_handle,
         }
