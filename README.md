@@ -2,8 +2,8 @@
 
 [![Build Status]][actions] [![Latest Version]][crates.io] [![Crate Downloads]][crates.io] [![chat]][discord]
 
-[build status]: https://img.shields.io/github/actions/workflow/status/apache/opendal/ci_bin_ofs.yml?branch=main
-[actions]: https://github.com/apache/opendal/actions?query=branch%3Amain
+[build status]: https://img.shields.io/github/actions/workflow/status/apache/opendal-ofs/ci.yml?branch=main
+[actions]: https://github.com/apache/opendal-ofs/actions?query=branch%3Amain
 [latest version]: https://img.shields.io/crates/v/ofs.svg
 [crates.io]: https://crates.io/crates/ofs
 [crate downloads]: https://img.shields.io/crates/d/ofs.svg
