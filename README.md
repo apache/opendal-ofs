@@ -22,7 +22,7 @@
 
 ```shell
 sudo pacman -S fuse3 --noconfirm # archlinux
-sudo apt-get -y install fuse     # debian/ubuntu
+sudo apt-get -y install fuse3    # debian/ubuntu
 ```
 
 ### Load `FUSE` kernel module on FreeBSD
