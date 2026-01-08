@@ -17,10 +17,10 @@
 
 use std::sync::OnceLock;
 
-use opendal::raw::tests;
-use opendal::services;
 use opendal::Capability;
 use opendal::Operator;
+use opendal::raw::tests;
+use opendal::services;
 use tempfile::TempDir;
 use test_context::TestContext;
 use tokio::runtime::Runtime;
