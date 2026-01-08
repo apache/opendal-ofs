@@ -26,6 +26,11 @@ on:
       - main
     paths:
       - "src/**"
+      - "tests/**"
+      - "integrations/**"
+      - "scripts/**"
+      - "Cargo.toml"
+      - "Cargo.lock"
       - ".github/workflows/ci.yml"
 
 concurrency:
