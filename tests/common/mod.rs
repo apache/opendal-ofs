@@ -20,7 +20,6 @@ use std::sync::OnceLock;
 use opendal::Capability;
 use opendal::Operator;
 use opendal::services;
-use opendal::tests;
 use tempfile::TempDir;
 use test_context::TestContext;
 use tokio::runtime::Runtime;
@@ -44,19 +43,12 @@ pub struct OfsTestContext {
 #[cfg(any(target_os = "linux", target_os = "freebsd"))]
 impl TestContext for OfsTestContext {
     fn setup() -> Self {
-        let mut backend_root = None;
-        let backend = tests::init_test_service()
-            .expect("init test services failed")
-            .unwrap_or_else(|| {
-                let tmp_root = tempfile::tempdir().expect("create temporary backend root");
-                let root_path = tmp_root.path().to_string_lossy().to_string();
-                let fs = services::Fs::default().root(&root_path);
-                let backend = Operator::new(fs)
-                    .expect("build fallback fs operator")
-                    .finish();
-                backend_root = Some(tmp_root);
-                backend
-            });
+        let tmp_root = tempfile::tempdir().expect("create temporary backend root");
+        let root_path = tmp_root.path().to_string_lossy().to_string();
+        let fs = services::Fs::default().root(&root_path);
+        let backend = Operator::new(fs)
+            .expect("build fallback fs operator")
+            .finish();
         let capability = backend.info().full_capability();
 
         INIT_LOGGER.get_or_init(|| logforth::starter_log::stderr().apply());
@@ -89,7 +81,7 @@ impl TestContext for OfsTestContext {
 
         OfsTestContext {
             mount_point,
-            backend_root,
+            backend_root: Some(tmp_root),
             capability,
             mount_handle,
         }
