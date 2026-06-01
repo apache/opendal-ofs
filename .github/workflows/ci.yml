@@ -24,9 +24,6 @@ on:
   pull_request:
     branches:
       - main
-    paths:
-      - "src/**"
-      - ".github/workflows/ci.yml"
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}-${{ github.event_name }}
@@ -40,10 +37,6 @@ jobs:
 
       - name: Setup Rust toolchain
         uses: ./.github/actions/setup
-        with:
-          need-rocksdb: true
-          need-protoc: true
-          github-token: ${{ secrets.GITHUB_TOKEN }}
       - name: Run sccache-cache
         uses: mozilla-actions/sccache-action@7d986dd989559c6ecdb630a3fd2557667be217ad
       - name: Cargo clippy && test
