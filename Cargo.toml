@@ -34,7 +34,7 @@ anyhow = { version = "1" }
 clap = { version = "4.5.40", features = ["derive", "env"] }
 log = { version = "0.4.22" }
 logforth = { version = "0.28.1", features = ["starter-log"] }
-opendal = { version = "0.54.0" }
+opendal = { version = "0.57.0" }
 tokio = { version = "1.47.0", features = [
   "fs",
   "macros",
@@ -60,7 +60,7 @@ services-fs = ["opendal/services-fs"]
 services-s3 = ["opendal/services-s3"]
 
 [dev-dependencies]
-opendal = { version = "0.54.0", features = ["tests"] }
+opendal = { version = "0.57.0", features = ["tests"] }
 tempfile = "3.23.0"
 test-context = "0.4.1"
 walkdir = "2.5.0"
