@@ -18,10 +18,9 @@
 name: Setup Rust Builder
 description: "Prepare Rust Build Environment"
 inputs:
-  need-rocksdb:
-    description: "This setup needs rocksdb or not"
   need-protoc:
     description: "This setup needs protoc or not"
+    default: "false"
   github-token:
     description: "Github Token"
     default: ""
@@ -45,49 +44,9 @@ runs:
         # Make sure rust has been setup
         cargo version
 
-    # Make sure all required lib has been installed.
-    - name: Setup Linux
-      if: runner.os == 'Linux'
-      shell: bash
-      run: sudo apt-get install libgflags-dev libsnappy-dev zlib1g-dev libbz2-dev liblz4-dev libzstd-dev
-
     - name: Setup Protoc
       if: inputs.need-protoc == 'true'
       uses: arduino/setup-protoc@v3
       with:
         version: "23.4"
         repo-token: ${{ inputs.github-token }}
-
-    - name: Setup rocksdb on linux
-      if: runner.os == 'Linux' && inputs.need-rocksdb == 'true'
-      shell: bash
-      run: |
-        # Set rocksdb lib path
-        echo "ROCKSDB_LIB_DIR=/tmp/rocksdb/lib" >> $GITHUB_ENV
-
-    - name: Cache rocksdb
-      id: cache-rocksdb
-      uses: actions/cache@v4
-      if: runner.os == 'Linux' && inputs.need-rocksdb == 'true'
-      with:
-        path: /tmp/rocksdb
-        key: r2-rocksdb-8.1.1
-
-    - name: Build rocksdb if not cached
-      if: steps.cache-rocksdb.outputs.cache-hit != 'true' && runner.os == 'Linux' && inputs.need-rocksdb == 'true'
-      shell: bash
-      run: |
-        set -e
-
-        cd /tmp
-        curl https://github.com/facebook/rocksdb/archive/refs/tags/v8.1.1.tar.gz -L -o rocksdb.tar.gz
-        tar -xzf rocksdb.tar.gz
-        cd rocksdb-8.1.1
-
-        mkdir /tmp/rocksdb
-        cmake -DCMAKE_INSTALL_PREFIX=/tmp/rocksdb -DPORTABLE=1
-        make -j$(nproc)
-        make install
-
-        cd ..
-        rm -rf /tmp/rocksdb-8.1.1

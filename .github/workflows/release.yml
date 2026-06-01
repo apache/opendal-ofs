@@ -1,0 +1,113 @@
+# Licensed to the Apache Software Foundation (ASF) under one
+# or more contributor license agreements.  See the NOTICE file
+# distributed with this work for additional information
+# regarding copyright ownership.  The ASF licenses this file
+# to you under the Apache License, Version 2.0 (the
+# "License"); you may not use this file except in compliance
+# with the License.  You may obtain a copy of the License at
+#
+#   http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing,
+# software distributed under the License is distributed on an
+# "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+# KIND, either express or implied.  See the License for the
+# specific language governing permissions and limitations
+# under the License.
+
+name: Ofs Release
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+env:
+  CARGO_TERM_COLOR: always
+  BIN_NAME: ofs
+
+jobs:
+  build:
+    name: Build ${{ matrix.target }}
+    runs-on: ${{ matrix.os }}
+    defaults:
+      run:
+        shell: bash
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            target: x86_64-unknown-linux-gnu
+            use-cross: false
+          - os: ubuntu-latest
+            target: aarch64-unknown-linux-gnu
+            use-cross: true
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Setup Rust builder
+        uses: ./.github/actions/setup
+
+      - name: Build target
+        uses: ClementTsang/cargo-action@v0.0.7
+        with:
+          use-cross: ${{ !!matrix.use-cross }}
+          command: build
+          args: --locked --release --target ${{ matrix.target }}
+        env:
+          CARGO_PROFILE_RELEASE_LTO: true
+
+      - name: Package artifact (Unix)
+        if: runner.os != 'Windows'
+        env:
+          TARGET: ${{ matrix.target }}
+        run: |
+          set -euo pipefail
+          ARCHIVE_NAME="ofs-${GITHUB_REF_NAME}-${TARGET}"
+          PACKAGE_DIR="${ARCHIVE_NAME}"
+          mkdir -p "${PACKAGE_DIR}"
+          cp "target/${TARGET}/release/${BIN_NAME}" "${PACKAGE_DIR}/"
+          cp LICENSE NOTICE "${PACKAGE_DIR}/"
+          mkdir -p dist
+          tar -czf "dist/${ARCHIVE_NAME}.tar.gz" -C "${PACKAGE_DIR}" .
+          rm -rf "${PACKAGE_DIR}"
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v5
+        with:
+          name: ofs-${{ github.ref_name }}-${{ matrix.target }}
+          path: dist/ofs-*
+          if-no-files-found: error
+
+  release:
+    name: Publish release
+    needs: build
+    if: startsWith(github.ref, 'refs/tags/')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Download all artifacts
+        uses: actions/download-artifact@v7
+        with:
+          path: dist
+          merge-multiple: true
+
+      - name: Publish GitHub release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            dist/*.tar.gz
+          name: ${{ github.ref_name }}
+          tag_name: ${{ github.ref_name }}
+          generate_release_notes: true
+
+      - name: Publish to crates.io
+        run: cargo publish --locked --no-verify
+        env:
+          CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
