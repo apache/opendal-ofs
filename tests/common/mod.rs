@@ -17,10 +17,10 @@
 
 use std::sync::OnceLock;
 
-use opendal::raw::tests;
-use opendal::services;
 use opendal::Capability;
 use opendal::Operator;
+use opendal::services;
+use opendal::tests;
 use tempfile::TempDir;
 use test_context::TestContext;
 use tokio::runtime::Runtime;
@@ -46,7 +46,7 @@ impl TestContext for OfsTestContext {
     fn setup() -> Self {
         let mut backend_root = None;
         let backend = tests::init_test_service()
-            .expect("init test services failed")
+            .expect("init test service")
             .unwrap_or_else(|| {
                 let tmp_root = tempfile::tempdir().expect("create temporary backend root");
                 let root_path = tmp_root.path().to_string_lossy().to_string();

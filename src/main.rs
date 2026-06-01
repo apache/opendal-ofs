@@ -44,13 +44,10 @@ async fn main() -> Result<()> {
 
 #[cfg(any(target_os = "linux", target_os = "freebsd", target_os = "macos"))]
 async fn execute(cfg: Config) -> Result<()> {
-    use std::env;
-    use std::str::FromStr;
-
     use fuse3::MountOptions;
     use fuse3::path::Session;
     use opendal::Operator;
-    use opendal::Scheme;
+    use std::env;
 
     if cfg.backend.has_host() {
         log::warn!("backend host will be ignored");
@@ -59,11 +56,8 @@ async fn execute(cfg: Config) -> Result<()> {
     let scheme_str = cfg.backend.scheme();
     let op_args = cfg.backend.query_pairs().into_owned();
 
-    let scheme = match Scheme::from_str(scheme_str) {
-        Ok(Scheme::Custom(_)) | Err(_) => Err(anyhow!("invalid scheme: {}", scheme_str)),
-        Ok(s) => Ok(s),
-    }?;
-    let backend = Operator::via_iter(scheme, op_args)?;
+    let backend = Operator::via_iter(scheme_str, op_args)
+        .map_err(|err| anyhow!("invalid scheme or arguments for {scheme_str}: {err}"))?;
 
     let mut mount_options = MountOptions::default();
     let mut gid = nix::unistd::getgid().into();
@@ -113,9 +107,6 @@ async fn execute(cfg: Config) -> Result<()> {
 
 #[cfg(target_os = "windows")]
 async fn execute(cfg: Config) -> Result<()> {
-    use std::path::PathBuf;
-    use std::str::FromStr;
-
     use anyhow::Context;
     use cloud_filter::root::HydrationType;
     use cloud_filter::root::PopulationType;
@@ -124,7 +115,7 @@ async fn execute(cfg: Config) -> Result<()> {
     use cloud_filter::root::SyncRootIdBuilder;
     use cloud_filter::root::SyncRootInfo;
     use opendal::Operator;
-    use opendal::Scheme;
+    use std::path::PathBuf;
     use tokio::runtime::Handle;
     use tokio::signal;
 
@@ -137,11 +128,8 @@ async fn execute(cfg: Config) -> Result<()> {
     let scheme_str = cfg.backend.scheme();
     let op_args = cfg.backend.query_pairs().into_owned();
 
-    let scheme = match Scheme::from_str(scheme_str) {
-        Ok(Scheme::Custom(_)) | Err(_) => Err(anyhow!("invalid scheme: {}", scheme_str)),
-        Ok(s) => Ok(s),
-    }?;
-    let backend = Operator::via_iter(scheme, op_args).context("invalid arguments")?;
+    let backend = Operator::via_iter(scheme_str, op_args)
+        .with_context(|| format!("invalid scheme or arguments for {scheme_str}"))?;
 
     let sync_root_id = SyncRootIdBuilder::new(PROVIDER_NAME)
         .user_security_id(
