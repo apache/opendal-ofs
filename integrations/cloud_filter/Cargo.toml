@@ -23,7 +23,7 @@ homepage = "https://opendal.apache.org/"
 license = "Apache-2.0"
 name = "cloud_filter_opendal"
 repository = "https://github.com/apache/opendal"
-rust-version = "1.85"
+rust-version = "1.88"
 version = "0.0.12"
 
 [package.metadata.docs.rs]
