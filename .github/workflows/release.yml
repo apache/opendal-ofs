@@ -50,7 +50,7 @@ jobs:
             build-command: cross
             use-cross: true
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
 
       - name: Setup Rust builder
         uses: ./.github/actions/setup
@@ -81,7 +81,7 @@ jobs:
           rm -rf "${PACKAGE_DIR}"
 
       - name: Upload artifact
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v7
         with:
           name: ofs-${{ github.ref_name }}-${{ matrix.target }}
           path: dist/ofs-*
@@ -93,10 +93,10 @@ jobs:
     if: startsWith(github.ref, 'refs/tags/')
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
 
       - name: Download all artifacts
-        uses: actions/download-artifact@v7
+        uses: actions/download-artifact@v8
         with:
           path: dist
           merge-multiple: true
