@@ -43,9 +43,11 @@ jobs:
         include:
           - os: ubuntu-latest
             target: x86_64-unknown-linux-gnu
+            build-command: cargo
             use-cross: false
           - os: ubuntu-latest
             target: aarch64-unknown-linux-gnu
+            build-command: cross
             use-cross: true
     steps:
       - uses: actions/checkout@v5
@@ -53,14 +55,15 @@ jobs:
       - name: Setup Rust builder
         uses: ./.github/actions/setup
 
+      - name: Install cross
+        if: matrix.use-cross
+        run: cargo install cross --locked
+
       - name: Build target
-        uses: ClementTsang/cargo-action@v0.0.7
-        with:
-          use-cross: ${{ !!matrix.use-cross }}
-          command: build
-          args: --locked --release --target ${{ matrix.target }}
         env:
+          BUILD_COMMAND: ${{ matrix.build-command }}
           CARGO_PROFILE_RELEASE_LTO: true
+        run: '"${BUILD_COMMAND}" build --locked --release --target "${{ matrix.target }}"'
 
       - name: Package artifact (Unix)
         if: runner.os != 'Windows'
@@ -99,7 +102,7 @@ jobs:
           merge-multiple: true
 
       - name: Publish GitHub release
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65 # v2.6.2
         with:
           files: |
             dist/*.tar.gz
