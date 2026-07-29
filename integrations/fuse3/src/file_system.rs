@@ -156,6 +156,15 @@ impl Filesystem {
 
         Ok(file)
     }
+
+    async fn finish_opened_file(file: OpenedFile) -> Result<()> {
+        if let Some(inner_writer) = file.inner_writer {
+            let mut inner = inner_writer.lock().await;
+            inner.writer.close().await.map_err(opendal_error2errno)?;
+        }
+
+        Ok(())
+    }
 }
 
 impl PathFilesystem for Filesystem {
@@ -482,15 +491,15 @@ impl PathFilesystem for Filesystem {
             "release(path={path:?}, fh={fh}, flags=0x{flags:x}, lock_owner={lock_owner}, flush={flush})"
         );
 
-        // Just take and forget it.
-        let _ = self.opened_files.take(FileKey::try_from(fh)?.0);
-        Ok(())
+        let Some(file) = self.opened_files.take(FileKey::try_from(fh)?.0) else {
+            return Ok(());
+        };
+
+        Self::finish_opened_file(file).await
     }
 
-    /// In design, flush could be called multiple times for a single open. But there is the only
-    /// place that we can handle the write operations.
-    ///
-    /// So we only support the use case that flush only be called once.
+    /// FUSE can call flush multiple times or omit it. The first flush finalizes the writer, while
+    /// release provides the fallback when flush is omitted.
     async fn flush(
         &self,
         _req: Request,
@@ -500,18 +509,14 @@ impl PathFilesystem for Filesystem {
     ) -> Result<()> {
         log::debug!("flush(path={path:?}, fh={fh}, lock_owner={lock_owner})");
 
-        let file = self
-            .opened_files
-            .take(FileKey::try_from(fh)?.0)
-            .ok_or(Errno::from(libc::EBADF))?;
+        let Some(file) = self.opened_files.take(FileKey::try_from(fh)?.0) else {
+            return Ok(());
+        };
 
-        if let Some(inner_writer) = file.inner_writer {
-            let mut lock = inner_writer.lock().await;
-            let res = lock.writer.close().await.map_err(opendal_error2errno);
-            return res.map(|_| ());
-        }
+        let path_mismatch = matches!(path, Some(path) if path != file.path);
+        Self::finish_opened_file(file).await?;
 
-        if matches!(path, Some(ref p) if p != &file.path) {
+        if path_mismatch {
             Err(Errno::from(libc::EBADF))?;
         }
 
