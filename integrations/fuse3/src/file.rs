@@ -37,7 +37,7 @@ pub struct OpenedFile {
 ///
 /// We need better naming and API for this struct.
 pub struct InnerWriter {
-    pub writer: Writer,
+    pub writer: Option<Writer>,
     pub written: u64,
 }
 

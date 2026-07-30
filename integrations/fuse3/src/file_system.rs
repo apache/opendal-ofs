@@ -157,10 +157,12 @@ impl Filesystem {
         Ok(file)
     }
 
-    async fn finish_opened_file(file: OpenedFile) -> Result<()> {
-        if let Some(inner_writer) = file.inner_writer {
+    async fn finish_writer(inner_writer: Option<Arc<Mutex<InnerWriter>>>) -> Result<()> {
+        if let Some(inner_writer) = inner_writer {
             let mut inner = inner_writer.lock().await;
-            inner.writer.close().await.map_err(opendal_error2errno)?;
+            if let Some(mut writer) = inner.writer.take() {
+                writer.close().await.map_err(opendal_error2errno)?;
+            }
         }
 
         Ok(())
@@ -383,7 +385,10 @@ impl PathFilesystem for Filesystem {
             } else {
                 0
             };
-            Some(Arc::new(Mutex::new(InnerWriter { writer, written })))
+            Some(Arc::new(Mutex::new(InnerWriter {
+                writer: Some(writer),
+                written,
+            })))
         } else {
             None
         };
@@ -468,6 +473,8 @@ impl PathFilesystem for Filesystem {
 
         inner
             .writer
+            .as_mut()
+            .ok_or(Errno::from(libc::EBADF))?
             .write_from(data)
             .await
             .map_err(opendal_error2errno)?;
@@ -495,7 +502,7 @@ impl PathFilesystem for Filesystem {
             return Ok(());
         };
 
-        Self::finish_opened_file(file).await
+        Self::finish_writer(file.inner_writer).await
     }
 
     /// FUSE can call flush multiple times or omit it. The first flush finalizes the writer, while
@@ -509,17 +516,12 @@ impl PathFilesystem for Filesystem {
     ) -> Result<()> {
         log::debug!("flush(path={path:?}, fh={fh}, lock_owner={lock_owner})");
 
-        let Some(file) = self.opened_files.take(FileKey::try_from(fh)?.0) else {
-            return Ok(());
+        let inner_writer = {
+            let file = self.get_opened_file(FileKey::try_from(fh)?, path)?;
+            file.inner_writer.clone()
         };
 
-        let path_mismatch = matches!(path, Some(path) if path != file.path);
-        Self::finish_opened_file(file).await?;
-
-        if path_mismatch {
-            Err(Errno::from(libc::EBADF))?;
-        }
-
+        Self::finish_writer(inner_writer).await?;
         Ok(())
     }
 
@@ -613,7 +615,10 @@ impl PathFilesystem for Filesystem {
                 .append(is_append)
                 .await
                 .map_err(opendal_error2errno)?;
-            Some(Arc::new(Mutex::new(InnerWriter { writer, written: 0 })))
+            Some(Arc::new(Mutex::new(InnerWriter {
+                writer: Some(writer),
+                written: 0,
+            })))
         } else {
             None
         };
