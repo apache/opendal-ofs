@@ -1,6 +1,6 @@
 - Proposal Name: `versioned_filesystem`
 - Start Date: 2026-07-29
-- RFC PR: [apache/opendal-ofs#0000](https://github.com/apache/opendal-ofs/pull/0000)
+- RFC PR: [apache/opendal-ofs#17](https://github.com/apache/opendal-ofs/pull/17)
 - Tracking Issue: [apache/opendal-ofs#0000](https://github.com/apache/opendal-ofs/issues/0000)
 
 # Summary
