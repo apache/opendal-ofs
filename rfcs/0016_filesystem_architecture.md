@@ -1,7 +1,7 @@
 - Proposal Name: `filesystem_architecture`
 - Start Date: 2026-07-30
 - RFC PR: [apache/opendal-ofs#16](https://github.com/apache/opendal-ofs/pull/16)
-- Tracking Issue: [apache/opendal-ofs#0000](https://github.com/apache/opendal-ofs/issues/0000)
+- Tracking Issue: [apache/opendal-ofs#19](https://github.com/apache/opendal-ofs/issues/19)
 
 # Summary
 
