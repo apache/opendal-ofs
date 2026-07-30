@@ -94,7 +94,7 @@ ofs volume create workspace \
   --model managed \
   --storage <storage-url>
 
-ofs mount workspace /mnt/workspace --profile portable
+ofs mount workspace /mnt/workspace
 ```
 
 Applications see stable files and directories. ofs metadata owns node
@@ -104,9 +104,11 @@ prefix is private to ofs and must not be modified by external writers.
 
 The metadata provider may use an embedded database, a remote database, or
 metadata objects. The deployment choice is hidden behind one transaction and
-change-feed contract. A Managed volume can expose atomic rename, stable handles,
-open-unlink, hard links, extended attributes, and locks only when the selected
-metadata provider and frontend implement the corresponding capabilities.
+change-feed contract. Every Managed volume provides stable node identity,
+generation-checked mutations, and atomic create, unlink, and same-volume
+rename. A metadata provider or frontend that cannot provide this baseline
+cannot back or expose a Managed volume. Hard links, extended attributes,
+advisory locks, and other operations remain optional capabilities.
 
 ## Mount and Sync
 
@@ -143,22 +145,25 @@ separate status and explicit wait operation. When both sides change from the
 same base generation and cannot be merged, ofs retains both contents and
 reports a conflict instead of choosing the last writer.
 
-## Capability profiles
+## Required contracts and optional capabilities
 
-Profiles are named, testable capability requirements:
+Selecting `Direct` or `Managed` and `Mount` or `Sync` is the complete
+user-facing mode selection. Each choice contributes the mandatory contract
+described above. ofs does not add another semantic bundle that weakens or
+rebundles those guarantees; a combination that cannot satisfy its selected
+models fails to start.
 
-- `storage-view` requires path lookup, enumeration, reads, and basic
-  attributes. Whole-file replacement is reported separately. This is the
-  normal Direct profile.
-- `portable` requires cross-platform names, stable node identity, and atomic
-  create, unlink, and same-volume rename. It is the default Managed profile.
-- `posix` adds individually reported Unix semantics such as mode and ownership,
-  symbolic and hard links, open-unlink, extended attributes, and advisory
-  locks.
+Operations outside the baseline are reported individually. A user can require
+them when starting an access model:
 
-Starting a mount or sync with a requested profile fails if the complete
-combination cannot satisfy it. `ofs status` reports the Volume Model, Access
-Model, effective capabilities, pending writes, conflicts, and the local and
+```text
+ofs mount workspace /mnt/workspace \
+  --require hard-link \
+  --require xattr
+```
+
+Missing requirements fail before the mount becomes visible. `ofs status`
+reports effective capabilities, pending writes, conflicts, and the local and
 remote durability positions.
 
 # Reference-level explanation
@@ -184,11 +189,11 @@ OpenDAL data storage
 ```
 
 The filesystem core owns common file operations, handles, generation checks,
-capability negotiation, cache policy, and error semantics. A Volume
-implementation owns namespace authority and publication. An OS frontend
-translates native operations without changing their guarantees. OpenDAL
-provides storage primitives and their native capabilities; it does not emulate
-filesystem transactions for ofs.
+baseline validation, capability reporting, cache policy, and error semantics.
+A Volume implementation owns namespace authority and publication. An OS
+frontend translates native operations without changing their guarantees.
+OpenDAL provides storage primitives and their native capabilities; it does not
+emulate filesystem transactions for ofs.
 
 The core contract includes these logical identities:
 
@@ -226,7 +231,9 @@ volume model
 Each capability defines its atomicity scope, durability boundary, multi-client
 visibility, and unsupported error. Frontends cannot simulate and advertise a
 stronger operation when a crash or competing writer can observe an intermediate
-state.
+state. Before access starts, the intersection must contain every operation
+required by the selected Volume and Access Models. Remaining operations are
+reported individually and can be asserted with `--require`.
 
 ## Direct namespace contract
 
@@ -259,9 +266,9 @@ remains a whole-object replacement. A rename implemented by copy and delete is
 reported as non-atomic. Recovery may complete or compensate that workflow, but
 does not retroactively make it atomic.
 
-If the backend cannot enforce a conditional replacement, Direct mode reports
-that limitation. A profile that requires conflict-safe writes cannot be
-enabled on that combination.
+If the backend cannot enforce a conditional replacement, writable Direct
+access is unavailable and the volume remains read-only. Direct mode never
+silently substitutes an unprotected last-writer-wins commit.
 
 Existing object names may be illegal or colliding on the local OS. Direct mode
 uses a deterministic, reversible escape representation for those entries and
@@ -354,13 +361,13 @@ preserve rename and deletion identity across clients.
 
 ## Naming and portability
 
-The `portable` profile defines a normalized Unicode representation, component
-and path length bounds, and a set of names valid on supported desktop
+The default Managed naming policy defines a normalized Unicode representation,
+component and path length bounds, and a set of names valid on supported desktop
 platforms. It rejects case-folding collisions and platform-reserved names at
 creation time.
 
-A Managed volume can opt into a platform-specific naming profile, such as
-Unix-only names. A frontend that cannot represent that profile rejects the
+A Managed volume can opt into a platform-specific naming policy, such as
+Unix-only names. A frontend that cannot represent that policy rejects the
 mount or sync instead of changing names. Direct volumes cannot reject existing
 objects, so they use the reversible path codec described above.
 
@@ -386,11 +393,13 @@ mutation.
 
 ## Conformance
 
-A `Volume Model × Access Model × OS frontend × backend` combination can claim a
-profile only after its conformance suite passes. Coverage includes crash points
-during publication, unknown commit results, concurrent generation changes,
-`fsync` followed by restart, name collisions, open-handle rename and unlink,
-cache invalidation, and offline sync conflicts.
+A `Volume Model × Access Model × OS frontend × backend` combination can ship
+only after the mandatory contracts of both selected models pass their
+conformance suites. Each optional capability requires targeted coverage before
+it is advertised. Tests include crash points during publication, unknown
+commit results, concurrent generation changes, `fsync` followed by restart,
+name collisions, open-handle rename and unlink, cache invalidation, and offline
+sync conflicts.
 
 # Drawbacks
 
@@ -415,8 +424,10 @@ handling, while Mount depends on online availability for mutation.
 
 Making POSIX the internal model would still require silent translation for
 Windows names, sharing modes, ACLs, and deletion behavior. Explicit
-capabilities and profiles preserve POSIX where it can be enforced and reject
-unsupported combinations elsewhere.
+model contracts and individual capabilities preserve POSIX operations where
+they can be enforced and reject unsupported combinations elsewhere. A future
+POSIX conformance label may expand to a versioned set of required capabilities,
+but it does not change the selected Volume or Access Model.
 
 ## One cross-platform mount implementation
 
@@ -482,8 +493,6 @@ need for shared ofs semantics above the frontend.
   Managed implementation?
 - Which exact path encoding and Unicode normalization form define the portable
   and Direct escape codecs?
-- Should writable Direct mode require backend conditional replacement, or
-  allow an explicitly unsafe profile?
 - Which Mount and Sync frontends form the first cross-platform release target?
 - Which cache lease and invalidation policy is required before Managed mounts
   can advertise multi-client coherence?
