@@ -372,3 +372,91 @@ state changes and external writes.
 Incremental observation, content chunking, caching, and multi-writer
 coordination fit behind the existing boundaries. Each optimization still has
 to satisfy the publication and recovery requirements.
+
+# Appendix A: Direct Mount implementation path
+
+This appendix applies the component model to the Direct Mount implementation
+at `0b0d112`. It takes the current FUSE-to-OpenDAL path to a named Direct Mount
+with recoverable publication, without introducing another model combination.
+
+## Expected use case
+
+A user keeps agent sessions, skills, MCP configuration, and other working files
+in an existing object store. They mount that namespace into a short-lived
+development environment and use ordinary file tools. Storage-native tools
+continue to see the same objects.
+
+The user can configure the same object namespace in another environment and
+read the files already published there. If another client changes an object
+while the user is editing it, ofs leaves the remote object unchanged, reports
+the conflict, and retains the local staged content.
+
+## Evolution from `0b0d112`
+
+At `0b0d112`, the CLI builds an OpenDAL operator from a storage URL and gives it
+directly to the FUSE frontend. This keeps the implementation small, but it also
+puts filesystem translation and storage behavior in the same path. Reads are
+usable; mutations lack common admission, guarded publication, and recovery.
+
+```text
+0b0d112
+
+CLI -> FUSE frontend -> OpenDAL operator
+
+RFC-0017 path
+
+CLI + volume catalog
+        |
+Mount frontend -> filesystem core -> Direct volume -> OpenDAL operator
+      |                  |
+local staging   publication coordinator
+```
+
+The read path moves behind the filesystem core and Direct Volume boundary. The
+Direct implementation handles object lookup and name encoding. Capability
+admission rejects the mount unless the operator supports read, stat, and list.
+The mount remains read-only at this point.
+
+The CLI adopts the catalog and access binding once reads flow through these
+boundaries. It creates named volumes, binds local state to the selected volume,
+and exposes the admitted capabilities through status. This replaces the
+positional CLI at `0b0d112`.
+
+Once the catalog and binding exist, writable access can be enabled. The Mount
+frontend prepares a durable staged file, the publication coordinator records
+pending publication, and the Direct implementation applies the expected
+object generation. Recovery runs before the mount is exposed. Status reports
+pending writes and conflicts through `ofs status`.
+
+## Usage
+
+```shell
+ofs volume create archive \
+  --model direct \
+  --storage 's3://?bucket=archive&region=us-east-1'
+
+ofs mount archive /mnt/archive
+```
+
+Direct Mount is read-only by default. Writable access has separate admission
+and durable access-local state:
+
+```shell
+ofs mount archive /mnt/archive \
+  --read-write \
+  --state /var/lib/ofs/archive-mount
+
+ofs status /mnt/archive \
+  --state /var/lib/ofs/archive-mount
+```
+
+## Scope
+
+The path covers lookup, attributes, directory enumeration, ranged reads, and
+read-only handles. A backend with conditional create and replacement can also
+provide file creation, local staging, and whole-file replacement.
+
+Directory creation, deletion, rename, links, special files, and attribute
+mutation are not admitted. `0b0d112` dispatches some of these operations, but
+the path does not yet have the protected namespace operations needed to
+advertise them.
