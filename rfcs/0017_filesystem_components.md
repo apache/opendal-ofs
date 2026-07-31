@@ -373,30 +373,27 @@ Incremental observation, content chunking, caching, and multi-writer
 coordination fit behind the existing boundaries. Each optimization still has
 to satisfy the publication and recovery requirements.
 
-# Appendix A: Direct Mount implementation path
+# Appendix A: Managed Sync implementation path
 
-This appendix applies the component model to the Direct Mount implementation
-at `0b0d112`. It takes the current FUSE-to-OpenDAL path to a named Direct Mount
-with recoverable publication, without introducing another model combination.
+This appendix applies the component model to a Managed Sync implementation at
+`0b0d112`. It adds a named Managed Volume and a native local replica, without
+introducing another model combination.
 
 ## Expected use case
 
-A user keeps agent sessions, skills, MCP configuration, and other working files
-in an existing object store. They mount that namespace into a short-lived
-development environment and use ordinary file tools. Storage-native tools
-continue to see the same objects.
+A user keeps agent sessions, skills, MCP configuration, and other memory as
+ordinary files in a short-lived agent environment. At startup, they synchronize
+the last published state into a local directory and use normal file tools.
 
-The user can configure the same object namespace in another environment and
-read the files already published there. If another client changes an object
-while the user is editing it, ofs leaves the remote object unchanged, reports
-the conflict, and retains the local staged content.
+Changes remain local until the user explicitly publishes them. Other
+environments continue to read the last published state and receive the new
+state on their next synchronization.
 
 ## Evolution from `0b0d112`
 
-At `0b0d112`, the CLI builds an OpenDAL operator from a storage URL and gives it
-directly to the FUSE frontend. This keeps the implementation small, but it also
-puts filesystem translation and storage behavior in the same path. Reads are
-usable; mutations lack common admission, guarded publication, and recovery.
+At `0b0d112`, ofs exposes one OpenDAL operator through FUSE. There is no
+Managed namespace, local replica state, or reconciliation path. Managed Sync
+adds these components alongside the existing path rather than adapting FUSE.
 
 ```text
 0b0d112
@@ -407,56 +404,49 @@ RFC-0017 path
 
 CLI + volume catalog
         |
-Mount frontend -> filesystem core -> Direct volume -> OpenDAL operator
-      |                  |
-local staging   publication coordinator
+Sync engine -> filesystem core -> Managed volume
+     |                |            /          \
+local Sync state  publication   Metadata    Data Store
+                  coordinator     Store          |
+                                           OpenDAL operator
 ```
 
-The read path moves behind the filesystem core and Direct Volume boundary. The
-Direct implementation handles object lookup and name encoding. Capability
-admission rejects the mount unless the operator supports read, stat, and list.
-The mount remains read-only at this point.
+The Managed Volume is established first. Its Metadata Store owns the namespace,
+generations, publisher fencing, and atomic commits. Its Data Store writes
+immutable file content through OpenDAL.
 
-The CLI adopts the catalog and access binding once reads flow through these
-boundaries. It creates named volumes, binds local state to the selected volume,
-and exposes the admitted capabilities through status. This replaces the
-positional CLI at `0b0d112`.
+The Sync engine then observes a native local tree, its common base, and the
+current Managed state. It stabilizes changed content, reconciles the three
+views, and gives the publication coordinator a replayable change set. Durable
+Sync state records the replica position and pending work outside the
+synchronized directory.
 
-Once the catalog and binding exist, writable access can be enabled. The Mount
-frontend prepares a durable staged file, the publication coordinator records
-pending publication, and the Direct implementation applies the expected
-object generation. Recovery runs before the mount is exposed. Status reports
-pending writes and conflicts through `ofs status`.
+Finally, the CLI binds the local replica to a named volume. One `ofs sync`
+invocation performs one reconciliation and exits. Recovery runs before
+reconciliation, and `ofs status` reports the replica's durable state.
 
 ## Usage
 
 ```shell
-ofs volume create archive \
-  --model direct \
-  --storage 's3://?bucket=archive&region=us-east-1'
+ofs volume create agent-home \
+  --model managed \
+  --storage <storage-url> \
+  --metadata <metadata-url>
 
-ofs mount archive /mnt/archive
+ofs sync agent-home ./agent-home \
+  --state /var/lib/ofs/agent-home
+
+ofs status ./agent-home \
+  --state /var/lib/ofs/agent-home
 ```
 
-Direct Mount is read-only by default. Writable access has separate admission
-and durable access-local state:
-
-```shell
-ofs mount archive /mnt/archive \
-  --read-write \
-  --state /var/lib/ofs/archive-mount
-
-ofs status /mnt/archive \
-  --state /var/lib/ofs/archive-mount
-```
+Synchronizing an empty directory materializes the published state. Later local
+changes remain private until the user runs the same command again. Reusing the
+state directory after restart resumes the same replica.
 
 ## Scope
 
-The path covers lookup, attributes, directory enumeration, ranged reads, and
-read-only handles. A backend with conditional create and replacement can also
-provide file creation, local staging, and whole-file replacement.
-
-Directory creation, deletion, rename, links, special files, and attribute
-mutation are not admitted. `0b0d112` dispatches some of these operations, but
-the path does not yet have the protected namespace operations needed to
-advertise them.
+The path covers regular files and directories, native local mutations,
+explicit whole-tree publication, restart from durable Sync state, and one
+fenced publisher at a time. Local filesystem operations do not publish remote
+state, and the path does not require FUSE.
