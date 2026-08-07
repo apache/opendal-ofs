@@ -355,7 +355,7 @@ impl PathFilesystem for Filesystem {
 
     async fn opendir(&self, _req: Request, path: &OsStr, flags: u32) -> Result<ReplyOpen> {
         log::debug!("opendir(path={path:?}, flags=0x{flags:x})");
-        Ok(ReplyOpen { fh: 0, flags })
+        Ok(ReplyOpen { fh: 0, flags: 0 })
     }
 
     async fn open(&self, _req: Request, path: &OsStr, flags: u32) -> Result<ReplyOpen> {
@@ -404,7 +404,7 @@ impl PathFilesystem for Filesystem {
 
         Ok(ReplyOpen {
             fh: FileKey(key).to_fh(),
-            flags,
+            flags: 0,
         })
     }
 
@@ -640,7 +640,7 @@ impl PathFilesystem for Filesystem {
             attr,
             generation: 0,
             fh: FileKey(key).to_fh(),
-            flags,
+            flags: 0,
         })
     }
 

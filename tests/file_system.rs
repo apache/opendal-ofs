@@ -93,3 +93,68 @@ async fn test_flush_keeps_file_handle_open() {
         .await
         .unwrap();
 }
+
+#[tokio::test]
+async fn test_open_replies_do_not_echo_posix_flags() {
+    let root = tempfile::tempdir().unwrap();
+    let root_path = root.path().to_string_lossy().to_string();
+    let operator = Operator::new(services::Fs::default().root(&root_path))
+        .unwrap()
+        .finish();
+    operator.write("source.txt", "hello").await.unwrap();
+
+    let filesystem = fuse3_opendal::Filesystem::new(operator, 0, 0);
+    let source_path = OsStr::new("source.txt");
+    for flags in [
+        (libc::O_WRONLY | libc::O_TRUNC) as u32,
+        (libc::O_RDWR | libc::O_TRUNC) as u32,
+    ] {
+        let opened = filesystem
+            .open(Request::default(), source_path, flags)
+            .await
+            .unwrap();
+        assert_eq!(opened.flags, 0);
+        filesystem
+            .release(
+                Request::default(),
+                Some(source_path),
+                opened.fh,
+                flags,
+                0,
+                false,
+            )
+            .await
+            .unwrap();
+    }
+
+    let target_path = OsStr::new("target.txt");
+    let create_flags = (libc::O_WRONLY | libc::O_TRUNC) as u32;
+    let created = filesystem
+        .create(
+            Request::default(),
+            OsStr::new(""),
+            target_path,
+            0o644,
+            create_flags,
+        )
+        .await
+        .unwrap();
+    assert_eq!(created.flags, 0);
+    filesystem
+        .release(
+            Request::default(),
+            Some(target_path),
+            created.fh,
+            create_flags,
+            0,
+            false,
+        )
+        .await
+        .unwrap();
+
+    let directory = filesystem
+        .opendir(Request::default(), OsStr::new(""), libc::O_DIRECTORY as u32)
+        .await
+        .unwrap();
+    assert_eq!(directory.flags, 0);
+}
