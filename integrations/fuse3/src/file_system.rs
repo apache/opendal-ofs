@@ -426,10 +426,14 @@ impl PathFilesystem for Filesystem {
             file.path.to_string_lossy().to_string()
         };
 
+        let end = offset
+            .checked_add(u64::from(size))
+            .ok_or(Errno::from(libc::EOVERFLOW))?;
+
         let data = self
             .op
             .read_with(&file_path)
-            .range(offset..)
+            .range(offset..end)
             .await
             .map_err(opendal_error2errno)?;
 
