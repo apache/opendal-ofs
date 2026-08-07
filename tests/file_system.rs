@@ -103,7 +103,7 @@ async fn test_read_honors_requested_range() {
         .finish();
     operator.write("source.txt", "hello world").await.unwrap();
 
-    let filesystem = fuse3_opendal::Filesystem::new(operator, 0, 0);
+    let filesystem = fuse3_opendal::Filesystem::new(operator.clone(), 0, 0);
     let path = OsStr::new("source.txt");
     let flags = libc::O_RDONLY as u32;
     let opened = filesystem
@@ -128,6 +128,13 @@ async fn test_read_honors_requested_range() {
         .await
         .unwrap();
     assert!(reply.data.is_empty());
+
+    operator.write("source.txt", "hello world!").await.unwrap();
+    let reply = filesystem
+        .read(Request::default(), Some(path), opened.fh, 11, 4)
+        .await
+        .unwrap();
+    assert_eq!(reply.data.as_ref(), b"!");
 
     filesystem
         .release(Request::default(), Some(path), opened.fh, flags, 0, false)

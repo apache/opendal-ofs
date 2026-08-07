@@ -369,18 +369,6 @@ impl PathFilesystem for Filesystem {
                 .map_err(opendal_error2errno)?;
         }
 
-        let content_length = if is_trunc {
-            0
-        } else if is_read || is_append {
-            self.op
-                .stat(&path.to_string_lossy())
-                .await
-                .map_err(opendal_error2errno)?
-                .content_length()
-        } else {
-            0
-        };
-
         let inner_writer = if is_trunc || is_append {
             let writer = self
                 .op
@@ -388,9 +376,18 @@ impl PathFilesystem for Filesystem {
                 .append(is_append)
                 .await
                 .map_err(opendal_error2errno)?;
+            let written = if is_append {
+                self.op
+                    .stat(&path.to_string_lossy())
+                    .await
+                    .map_err(opendal_error2errno)?
+                    .content_length()
+            } else {
+                0
+            };
             Some(Arc::new(Mutex::new(InnerWriter {
                 writer: Some(writer),
-                written: if is_append { content_length } else { 0 },
+                written,
             })))
         } else {
             None
@@ -401,7 +398,6 @@ impl PathFilesystem for Filesystem {
             .insert(OpenedFile {
                 path: path.into(),
                 is_read,
-                content_length,
                 inner_writer,
             })
             .ok_or(Errno::from(libc::EBUSY))?;
@@ -422,18 +418,24 @@ impl PathFilesystem for Filesystem {
     ) -> Result<ReplyData> {
         log::debug!("read(path={path:?}, fh={fh}, offset={offset}, size={size})");
 
-        let (file_path, content_length) = {
+        let file_path = {
             let file = self.get_opened_file(FileKey::try_from(fh)?, path)?;
             if !file.is_read {
                 Err(Errno::from(libc::EACCES))?;
             }
-            (file.path.to_string_lossy().to_string(), file.content_length)
+            file.path.to_string_lossy().to_string()
         };
 
         let end = offset
             .checked_add(u64::from(size))
-            .ok_or(Errno::from(libc::EOVERFLOW))?
-            .min(content_length);
+            .ok_or(Errno::from(libc::EOVERFLOW))?;
+        let content_length = self
+            .op
+            .stat(&file_path)
+            .await
+            .map_err(opendal_error2errno)?
+            .content_length();
+        let end = end.min(content_length);
 
         if offset >= end {
             return Ok(ReplyData { data: Bytes::new() });
@@ -644,7 +646,6 @@ impl PathFilesystem for Filesystem {
             .insert(OpenedFile {
                 path: path.into(),
                 is_read,
-                content_length: 0,
                 inner_writer,
             })
             .ok_or(Errno::from(libc::EBUSY))?;
