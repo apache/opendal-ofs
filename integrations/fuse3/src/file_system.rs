@@ -43,6 +43,10 @@ use super::file::OpenedFile;
 
 const TTL: Duration = Duration::from_secs(1); // 1 second
 
+/// FUSE reply flags (`FOPEN_*`) are independent from POSIX request flags (`O_*`).
+/// Advertise no optional open behavior until the filesystem defines an explicit policy.
+const FUSE_OPEN_REPLY_FLAGS: u32 = 0;
+
 /// `Filesystem` represents the filesystem that implements [`PathFilesystem`] by opendal.
 ///
 /// `Filesystem` must be used along with `fuse3`'s `Session` like the following:
@@ -355,7 +359,10 @@ impl PathFilesystem for Filesystem {
 
     async fn opendir(&self, _req: Request, path: &OsStr, flags: u32) -> Result<ReplyOpen> {
         log::debug!("opendir(path={path:?}, flags=0x{flags:x})");
-        Ok(ReplyOpen { fh: 0, flags: 0 })
+        Ok(ReplyOpen {
+            fh: 0,
+            flags: FUSE_OPEN_REPLY_FLAGS,
+        })
     }
 
     async fn open(&self, _req: Request, path: &OsStr, flags: u32) -> Result<ReplyOpen> {
@@ -404,7 +411,7 @@ impl PathFilesystem for Filesystem {
 
         Ok(ReplyOpen {
             fh: FileKey(key).to_fh(),
-            flags: 0,
+            flags: FUSE_OPEN_REPLY_FLAGS,
         })
     }
 
@@ -640,7 +647,7 @@ impl PathFilesystem for Filesystem {
             attr,
             generation: 0,
             fh: FileKey(key).to_fh(),
-            flags: 0,
+            flags: FUSE_OPEN_REPLY_FLAGS,
         })
     }
 
