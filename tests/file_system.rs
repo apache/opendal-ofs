@@ -117,6 +117,18 @@ async fn test_read_honors_requested_range() {
         .unwrap();
     assert_eq!(reply.data.as_ref(), b"ello");
 
+    let reply = filesystem
+        .read(Request::default(), Some(path), opened.fh, 8, 8)
+        .await
+        .unwrap();
+    assert_eq!(reply.data.as_ref(), b"rld");
+
+    let reply = filesystem
+        .read(Request::default(), Some(path), opened.fh, 11, 4)
+        .await
+        .unwrap();
+    assert!(reply.data.is_empty());
+
     filesystem
         .release(Request::default(), Some(path), opened.fh, flags, 0, false)
         .await

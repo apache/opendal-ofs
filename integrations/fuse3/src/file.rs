@@ -30,6 +30,7 @@ use tokio::sync::Mutex;
 pub struct OpenedFile {
     pub path: OsString,
     pub is_read: bool,
+    pub content_length: u64,
     pub inner_writer: Option<Arc<Mutex<InnerWriter>>>,
 }
 
