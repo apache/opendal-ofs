@@ -42,6 +42,9 @@ jobs:
           rustc --version
           cargo --version
 
+      - name: Check lockfile
+        run: cargo update -w --locked --verbose
+
       - name: Install repository tools
         uses: taiki-e/install-action@v2
         with:
@@ -53,12 +56,38 @@ jobs:
       - name: Check targets
         run: cargo x check
 
-  test:
-    name: Test
+  msrv:
+    name: MSRV
     runs-on: ubuntu-24.04
     timeout-minutes: 30
+    env:
+      OFS_MSRV: "1.91.0"
     steps:
       - uses: actions/checkout@v7
+
+      - name: Install Rust MSRV
+        run: rustup toolchain install "$OFS_MSRV"
+
+      - name: Check with Rust MSRV
+        run: cargo +"$OFS_MSRV" check --workspace --all-targets --locked
+
+  test:
+    name: Test
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+    strategy:
+      matrix:
+        os:
+          - ubuntu-latest
+          - macos-latest
+          - windows-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Show Rust toolchain
+        run: |
+          rustc --version
+          cargo --version
 
       - name: Run tests
         run: cargo x test
@@ -84,6 +113,7 @@ jobs:
     if: ${{ always() }}
     needs:
       - check
+      - msrv
       - test
       - compliance
     steps:
@@ -91,6 +121,7 @@ jobs:
         run: |
           if [[ ! ( \
                  "${{ needs.check.result }}" == "success" \
+              && "${{ needs.msrv.result }}" == "success" \
               && "${{ needs.test.result }}" == "success" \
               && "${{ needs.compliance.result }}" == "success" \
               ) ]]; then
