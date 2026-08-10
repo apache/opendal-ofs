@@ -15,6 +15,20 @@
 # specific language governing permissions and limitations
 # under the License.
 
-[toolchain]
-channel = "1.85.0"
-components = ["cargo", "rustfmt", "clippy", "rust-analyzer"]
+exclude = ["target/**"]
+include = ["Cargo.toml", "**/*.toml"]
+
+[formatting]
+align_entries = false
+allowed_blank_lines = 1
+array_auto_collapse = true
+array_auto_expand = true
+array_trailing_comma = true
+column_width = 100
+compact_arrays = true
+compact_inline_tables = false
+crlf = false
+indent_string = "  "
+indent_tables = false
+reorder_keys = true
+trailing_newline = true
