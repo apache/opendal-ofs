@@ -42,44 +42,41 @@ jobs:
           rustc --version
           cargo --version
 
-      - name: Check formatting
-        run: cargo fmt --all --check
-
-      - name: Check targets
-        run: cargo check --all-targets
-
-      - name: Run Clippy
-        run: cargo clippy --all-targets -- -D warnings
-
-      - name: Run tests
-        run: cargo test --all-targets
-
-      - name: Build documentation
-        env:
-          RUSTDOCFLAGS: -D warnings
-        run: cargo doc --no-deps
-
-  licenses:
-    name: License headers
-    runs-on: ubuntu-24.04
-    timeout-minutes: 10
-    steps:
-      - uses: actions/checkout@v7
-      - name: Check license headers
-        uses: korandoru/hawkeye@v6
-
-  dependencies:
-    name: Dependencies
-    runs-on: ubuntu-24.04
-    timeout-minutes: 10
-    steps:
-      - uses: actions/checkout@v7
-      - name: Install cargo-deny
+      - name: Install repository tools
         uses: taiki-e/install-action@v2
         with:
-          tool: cargo-deny@0.14.22
-      - name: Check dependency licenses
-        run: cargo deny check licenses
+          tool: taplo-cli,typos-cli
+
+      - name: Run linters
+        run: cargo x lint
+
+      - name: Check targets
+        run: cargo x check
+
+  test:
+    name: Test
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Run tests
+        run: cargo x test
+
+  compliance:
+    name: Compliance
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Install repository tools
+        uses: taiki-e/install-action@v2
+        with:
+          tool: hawkeye,cargo-deny@0.14.22
+
+      - name: Check licenses
+        run: cargo x licenses
 
   required:
     name: Required
@@ -87,15 +84,15 @@ jobs:
     if: ${{ always() }}
     needs:
       - check
-      - licenses
-      - dependencies
+      - test
+      - compliance
     steps:
       - name: Guardian
         run: |
           if [[ ! ( \
                  "${{ needs.check.result }}" == "success" \
-              && "${{ needs.licenses.result }}" == "success" \
-              && "${{ needs.dependencies.result }}" == "success" \
+              && "${{ needs.test.result }}" == "success" \
+              && "${{ needs.compliance.result }}" == "success" \
               ) ]]; then
             echo "Required jobs haven't been completed successfully."
             exit 1
