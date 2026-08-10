@@ -4,8 +4,10 @@ Thank you for contributing to Apache OpenDAL™ File System.
 
 ## Set up the repository
 
-Install Rust with [rustup]. The repository's `rust-toolchain.toml` selects the
-supported compiler and installs rustfmt and Clippy automatically.
+Install Rust with [rustup]. Rustup reads the repository's
+`rust-toolchain.toml`, selects the stable toolchain, and installs rustfmt and
+Clippy automatically. The minimum supported Rust version is 1.91.0, as
+configured in `Cargo.toml`.
 
 The lint and compliance tasks also use Taplo, typos, Hawkeye, and cargo-deny.
 Install them before running the complete check suite:

@@ -20,3 +20,8 @@ cargo x licenses
 
 Keep commits focused and use semantic commit and pull request titles such as
 `feat:`, `fix:`, `docs:`, `build:`, or `ci:`.
+
+## Important notes
+
+- Minimum Rust version is 1.91.0, configured in `Cargo.toml`. The development
+  toolchain tracks stable through `rust-toolchain.toml`.

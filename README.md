@@ -1,13 +1,13 @@
 # Apache OpenDAL™ File System
 
-[![Build Status]][actions] [![Latest Version]][crates.io] [![Crate Downloads]][crates.io] [![MSRV 1.85]][msrv] [![Apache 2.0 licensed]][license] [![chat]][discord]
+[![Build Status]][actions] [![Latest Version]][crates.io] [![Crate Downloads]][crates.io] [![MSRV 1.91.0]][msrv] [![Apache 2.0 licensed]][license] [![chat]][discord]
 
 [build status]: https://img.shields.io/github/actions/workflow/status/apache/opendal-ofs/ci.yml?branch=main
 [actions]: https://github.com/apache/opendal-ofs/actions?query=branch%3Amain
 [latest version]: https://img.shields.io/crates/v/ofs.svg
 [crates.io]: https://crates.io/crates/ofs
 [crate downloads]: https://img.shields.io/crates/d/ofs.svg
-[msrv 1.85]: https://img.shields.io/badge/MSRV-1.85-green?logo=rust
+[msrv 1.91.0]: https://img.shields.io/badge/MSRV-1.91.0-green?logo=rust
 [msrv]: https://www.whatrustisit.com
 [apache 2.0 licensed]: https://img.shields.io/crates/l/ofs
 [license]: https://www.apache.org/licenses/LICENSE-2.0
