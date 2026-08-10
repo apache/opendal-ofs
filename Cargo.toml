@@ -17,8 +17,8 @@
 
 [package]
 categories = ["filesystem"]
-description = "OpenDAL File System"
-keywords = ["storage", "data", "s3", "fs", "azblob"]
+description = "Apache OpenDAL File System"
+keywords = ["storage", "filesystem"]
 name = "ofs"
 version = "0.0.24"
 
@@ -26,37 +26,29 @@ authors = ["Apache OpenDAL <dev@opendal.apache.org>"]
 edition = "2024"
 homepage = "https://opendal.apache.org/"
 license = "Apache-2.0"
-repository = "https://github.com/apache/opendal"
+publish = false
+repository = "https://github.com/apache/opendal-ofs"
 rust-version = "1.85"
 
-[dependencies]
-anyhow = { version = "1" }
-clap = { version = "4.5.40", features = ["derive", "env"] }
-log = { version = "0.4.22" }
-logforth = { version = "0.28.1", features = ["starter-log"] }
-opendal = { version = "0.57.0" }
-tokio = { version = "1.47.0", features = [
-  "fs",
-  "macros",
-  "rt-multi-thread",
-  "io-std",
-  "signal",
-] }
-url = { version = "2.5.4" }
+[workspace]
+members = ["."]
+resolver = "3"
 
-[target.'cfg(any(target_os = "linux", target_os = "freebsd", target_os = "macos"))'.dependencies]
-fuse3 = { version = "0.8.1", "features" = ["tokio-runtime", "unprivileged"] }
-fuse3_opendal = { version = "0.0.19", path = "integrations/fuse3" }
-libc = "0.2.154"
-nix = { version = "0.30.1", features = ["user"] }
+[workspace.metadata.release]
+pre-release-commit-message = "chore: release v{{version}}"
+shared-version = true
+sign-tag = true
+tag-name = "v{{version}}"
 
-[features]
-default = ["services-fs", "services-s3"]
-services-fs = ["opendal/services-fs"]
-services-s3 = ["opendal/services-s3"]
+[workspace.lints.rust]
+unknown_lints = "deny"
+unsafe_code = "deny"
+unused_must_use = "deny"
 
-[dev-dependencies]
-opendal = { version = "0.57.0", features = ["tests"] }
-tempfile = "3.23.0"
-test-context = "0.4.1"
-walkdir = "2.5.0"
+[workspace.lints.clippy]
+dbg_macro = "deny"
+too_many_arguments = "allow"
+type_complexity = "allow"
+
+[lints]
+workspace = true
