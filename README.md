@@ -1,56 +1,45 @@
-# Apache OpenDAL™ ofs
+# Apache OpenDAL™ File System
 
-[![Build Status]][actions] [![Latest Version]][crates.io] [![Crate Downloads]][crates.io] [![chat]][discord]
+[![Build Status]][actions] [![Latest Version]][crates.io] [![Crate Downloads]][crates.io] [![MSRV 1.85]][msrv] [![Apache 2.0 licensed]][license] [![chat]][discord]
 
 [build status]: https://img.shields.io/github/actions/workflow/status/apache/opendal-ofs/ci.yml?branch=main
 [actions]: https://github.com/apache/opendal-ofs/actions?query=branch%3Amain
 [latest version]: https://img.shields.io/crates/v/ofs.svg
 [crates.io]: https://crates.io/crates/ofs
 [crate downloads]: https://img.shields.io/crates/d/ofs.svg
+[msrv 1.85]: https://img.shields.io/badge/MSRV-1.85-green?logo=rust
+[msrv]: https://www.whatrustisit.com
+[apache 2.0 licensed]: https://img.shields.io/crates/l/ofs
+[license]: https://www.apache.org/licenses/LICENSE-2.0
 [chat]: https://img.shields.io/discord/1081052318650339399
 [discord]: https://opendal.apache.org/discord
 
-`ofs` is a userspace filesystem backing by OpenDAL.
+`ofs` is the Apache OpenDAL filesystem project.
 
-## Status
+> [!IMPORTANT]
+> **Status: active redesign**
+>
+> We are actively working on the design of the next `ofs` release under
+> [RFC-0016]. The `main` branch is a buildable project scaffold and does not
+> currently provide a mount command or runtime API.
 
-`ofs` is a work in progress. we only support `fs` and `s3` as backend on `Linux` currently.
+## Previous releases
 
-## How to use `ofs`
+The implementation used by earlier published releases is preserved on the
+[`backup`] branch. It predates RFC-0016 and remains available for reference
+while the new runtime is designed.
 
-### Install `FUSE` on Linux
+[rfc-0016]: rfcs/0016_filesystem_architecture.md
+[`backup`]: https://github.com/apache/opendal-ofs/tree/backup
 
-```shell
-sudo pacman -S fuse3 --noconfirm # archlinux
-sudo apt-get -y install fuse3    # debian/ubuntu
-```
+## Development
 
-### Load `FUSE` kernel module on FreeBSD
-
-```shell
-kldload fuse
-```
-
-### Install `ofs`
-
-`ofs` could be installed by `cargo`:
+Run the current project checks with:
 
 ```shell
-cargo install ofs
-```
-
-> `cargo` is the Rust package manager. `cargo` could be installed by following the [Installation](https://www.rust-lang.org/tools/install) from Rust official website.
-
-### Mount directory
-
-```shell
-ofs <mount-point> 'fs://?root=<directory>'
-```
-
-### Mount S3 bucket
-
-```shell
-ofs <mount-point> 's3://?root=<path>&bucket=<bucket>&endpoint=<endpoint>&region=<region>&access_key_id=<access-key-id>&secret_access_key=<secret-access-key>'
+cargo fmt --all --check
+cargo clippy --all-targets -- -D warnings
+cargo test --all-targets
 ```
 
 ## Branding
@@ -61,6 +50,6 @@ For more details, see the [Apache Product Name Usage Guide](https://www.apache.o
 
 ## License and Trademarks
 
-Licensed under the Apache License, Version 2.0: http://www.apache.org/licenses/LICENSE-2.0
+Licensed under the Apache License, Version 2.0: <http://www.apache.org/licenses/LICENSE-2.0>
 
 Apache OpenDAL, OpenDAL, and Apache are either registered trademarks or trademarks of the Apache Software Foundation.

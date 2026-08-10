@@ -3,6 +3,12 @@
 - RFC PR: [apache/opendal-ofs#16](https://github.com/apache/opendal-ofs/pull/16)
 - Tracking Issue: [apache/opendal-ofs#19](https://github.com/apache/opendal-ofs/issues/19)
 
+> [!NOTE]
+> **Update, August 10, 2026:** `main` no longer contains the previous Direct
+> Mount implementation. Its source is preserved on the
+> [`backup`](https://github.com/apache/opendal-ofs/tree/backup) branch while the
+> new implementation is designed. The RFC below remains unchanged.
+
 # Summary
 
 Define ofs as a cross-platform filesystem engine with two independent choices.
