@@ -18,26 +18,85 @@
 name: Ofs CI
 
 on:
-  push:
-    branches:
-      - main
   pull_request:
     branches:
       - main
 
+permissions:
+  contents: read
+
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}-${{ github.event_name }}
+  group: ${{ github.workflow }}-${{ github.event_name }}-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
-  check_clippy_and_test:
-    runs-on: ubuntu-latest
+  check:
+    name: Check
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v7
 
-      - name: Setup Rust toolchain
-        uses: ./.github/actions/setup
-      - name: Cargo clippy && test
+      - name: Show Rust toolchain
         run: |
-          cargo clippy --all-targets --all-features -- -D warnings
-          cargo test --all-targets --all-features
+          rustc --version
+          cargo --version
+
+      - name: Check formatting
+        run: cargo fmt --all --check
+
+      - name: Check targets
+        run: cargo check --all-targets
+
+      - name: Run Clippy
+        run: cargo clippy --all-targets -- -D warnings
+
+      - name: Run tests
+        run: cargo test --all-targets
+
+      - name: Build documentation
+        env:
+          RUSTDOCFLAGS: -D warnings
+        run: cargo doc --no-deps
+
+  licenses:
+    name: License headers
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+      - name: Check license headers
+        uses: korandoru/hawkeye@v6
+
+  dependencies:
+    name: Dependencies
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+      - name: Install cargo-deny
+        uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-deny@0.14.22
+      - name: Check dependency licenses
+        run: cargo deny check licenses
+
+  required:
+    name: Required
+    runs-on: ubuntu-24.04
+    if: ${{ always() }}
+    needs:
+      - check
+      - licenses
+      - dependencies
+    steps:
+      - name: Guardian
+        run: |
+          if [[ ! ( \
+                 "${{ needs.check.result }}" == "success" \
+              && "${{ needs.licenses.result }}" == "success" \
+              && "${{ needs.dependencies.result }}" == "success" \
+              ) ]]; then
+            echo "Required jobs haven't been completed successfully."
+            exit 1
+          fi

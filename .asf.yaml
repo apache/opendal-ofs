@@ -35,6 +35,9 @@ github:
     rebase: false
   protected_branches:
     main:
+      required_status_checks:
+        contexts:
+          - Required
       required_pull_request_reviews:
         required_approving_review_count: 1
   custom_subjects:
@@ -52,4 +55,3 @@ notifications:
   issues: commits@opendal.apache.org
   pullrequests: commits@opendal.apache.org
   discussions: dev@opendal.apache.org
-
