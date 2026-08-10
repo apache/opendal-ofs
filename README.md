@@ -34,12 +34,13 @@ while the new runtime is designed.
 
 ## Development
 
-Run the current project checks with:
+See [CONTRIBUTING.md] for setup instructions. Run the repository checks with:
 
 ```shell
-cargo fmt --all --check
-cargo clippy --all-targets -- -D warnings
-cargo test --all-targets
+cargo x lint
+cargo x check
+cargo x test
+cargo x licenses
 ```
 
 ## Branding
