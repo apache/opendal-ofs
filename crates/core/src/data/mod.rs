@@ -15,12 +15,12 @@
 // specific language governing permissions and limitations
 // under the License.
 
-//! OpenDAL-backed runtime primitives for the Managed v0 format.
+//! Streaming placement, encoding, and verified reads for data segments.
 
-pub mod data;
-mod error;
-pub mod storage;
+mod codec;
+mod range;
+mod segment;
 
-pub use error::{Error, ErrorKind, Result};
-pub use ofs_managed_format::v0 as format;
-pub use ofs_managed_format::v0::model as filesystem;
+pub use codec::{ContentHasher, ExtentCodec, IdentityCodec};
+pub use range::RangeReader;
+pub use segment::DataSegmentWriter;
