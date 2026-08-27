@@ -182,9 +182,13 @@ struct Evidence<'a> {
 fn run(args: CommandAcceptance) -> Result<(), String> {
     let profile = Profile::resolve(&args)?;
     build_product()?;
+    let run_root = env::var_os("OFS_ACCEPTANCE_ROOT")
+        .map_or_else(|| workspace().join(".local/acceptance/runs"), PathBuf::from);
+    fs::create_dir_all(&run_root)
+        .map_err(|error| format!("create acceptance run root {}: {error}", run_root.display()))?;
     let root = tempfile::Builder::new()
         .prefix("opendal-ofs-acceptance-")
-        .tempdir()
+        .tempdir_in(&run_root)
         .map_err(|error| format!("create acceptance root: {error}"))?;
     let paths = Paths::new(root.path());
     fs::create_dir_all(&paths.replica_a).map_err(|error| format!("create replica A: {error}"))?;
