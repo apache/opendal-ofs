@@ -20,7 +20,7 @@
 use std::collections::BTreeMap;
 use std::env;
 use std::fs;
-use std::io::{Read as _, Write as _};
+use std::io::{Read as _, Seek as _, SeekFrom, Write as _};
 use std::path::{Path, PathBuf};
 use std::process::{Command, Output};
 use std::thread;
@@ -171,6 +171,7 @@ struct Evidence<'a> {
     initial_publish_ms: u128,
     cold_restore_ms: u128,
     reconcile_ms: u128,
+    sparse_publish_ms: Option<u128>,
     post_gc_restore_ms: u128,
     initial_storage: StorageShape,
     final_storage: StorageShape,
@@ -211,9 +212,24 @@ fn run(args: CommandAcceptance) -> Result<(), String> {
     require_same_tree(&paths.replica_a, &paths.replica_b, "cold restore")?;
 
     let reconcile_started = Instant::now();
+    let mut sparse_publish_ms = None;
     for generation in 0..profile.generations {
-        mutate_dataset(&paths.replica_a, profile, generation)?;
-        product.sync(&paths.replica_a, &paths.state_a)?;
+        let change_set = mutate_dataset(
+            &paths.replica_a,
+            &paths.home.join(format!("changes-{generation}.ndjson")),
+            profile,
+            generation,
+        )?;
+        let publish_started = Instant::now();
+        match change_set {
+            Some(change_set) => {
+                product.sync_changes(&paths.replica_a, &paths.state_a, &change_set)?
+            }
+            None => product.sync(&paths.replica_a, &paths.state_a)?,
+        }
+        if matches!(profile.name, ProfileName::LargeFiles) {
+            sparse_publish_ms = Some(publish_started.elapsed().as_millis());
+        }
         product.sync(&paths.replica_b, &paths.state_b)?;
         require_same_tree(&paths.replica_a, &paths.replica_b, "reconciliation")?;
     }
@@ -248,6 +264,7 @@ fn run(args: CommandAcceptance) -> Result<(), String> {
         initial_publish_ms,
         cold_restore_ms,
         reconcile_ms,
+        sparse_publish_ms,
         post_gc_restore_ms,
         initial_storage,
         final_storage: fixture.storage_shape()?,
@@ -359,6 +376,18 @@ impl Product {
             .arg("--json");
         let output = require_success(command, "read replica status")?;
         serde_json::from_slice(&output.stdout).map_err(|error| format!("decode status: {error}"))
+    }
+
+    fn sync_changes(&self, replica: &Path, state: &Path, changes: &Path) -> Result<(), String> {
+        let mut command = self.command();
+        command
+            .args(["sync", "acceptance"])
+            .arg(replica)
+            .arg("--state")
+            .arg(state)
+            .arg("--change-set")
+            .arg(changes);
+        require_success(command, "synchronize changed ranges").map(drop)
     }
 
     fn gc(&self) -> Result<(), String> {
@@ -557,7 +586,16 @@ fn seed_dataset(root: &Path, profile: Profile) -> Result<(), String> {
     Ok(())
 }
 
-fn mutate_dataset(root: &Path, profile: Profile, generation: u64) -> Result<(), String> {
+fn mutate_dataset(
+    root: &Path,
+    change_set: &Path,
+    profile: Profile,
+    generation: u64,
+) -> Result<Option<PathBuf>, String> {
+    if matches!(profile.name, ProfileName::LargeFiles) {
+        sparse_mutate(root, change_set, profile, generation)?;
+        return Ok(Some(change_set.to_owned()));
+    }
     for ordinal in 0..profile.changes {
         let index = profile
             .seed
@@ -571,7 +609,75 @@ fn mutate_dataset(root: &Path, profile: Profile, generation: u64) -> Result<(), 
         )?;
     }
     let created = root.join(format!("created/generation-{generation:04}.bin"));
-    write_profile_file(&created, profile, u64::MAX.wrapping_sub(generation))
+    write_profile_file(&created, profile, u64::MAX.wrapping_sub(generation))?;
+    Ok(None)
+}
+
+fn sparse_mutate(
+    root: &Path,
+    change_set: &Path,
+    profile: Profile,
+    generation: u64,
+) -> Result<(), String> {
+    let relative = dataset_path(
+        Path::new(""),
+        profile.directory_fanout,
+        generation % profile.files,
+    );
+    let path = root.join(&relative);
+    let mut input = fs::File::open(&path)
+        .map_err(|error| format!("open sparse mutation base {}: {error}", path.display()))?;
+    let mut hasher = blake3::Hasher::new();
+    let mut buffer = [0_u8; 1024 * 1024];
+    loop {
+        let length = input
+            .read(&mut buffer)
+            .map_err(|error| format!("hash sparse mutation base {}: {error}", path.display()))?;
+        if length == 0 {
+            break;
+        }
+        hasher.update(&buffer[..length]);
+    }
+    let digest = hasher.finalize();
+    let ranges = [
+        0_u64,
+        profile.file_bytes / 2,
+        profile.file_bytes.saturating_sub(4 * 1024),
+    ];
+    let mut file = fs::OpenOptions::new()
+        .write(true)
+        .open(&path)
+        .map_err(|error| format!("open sparse mutation target {}: {error}", path.display()))?;
+    for (ordinal, &offset) in ranges.iter().enumerate() {
+        file.seek(SeekFrom::Start(offset))
+            .map_err(|error| format!("seek sparse mutation target: {error}"))?;
+        let mut bytes = [0_u8; 4 * 1024];
+        fill_bytes(
+            &mut bytes,
+            profile.seed ^ generation.rotate_left(17) ^ ordinal as u64,
+        );
+        file.write_all(&bytes)
+            .map_err(|error| format!("write sparse mutation target: {error}"))?;
+    }
+    let entry = serde_json::json!({
+        "path": relative.to_string_lossy(),
+        "base": {
+            "digest": digest.to_hex().to_string(),
+            "length": profile.file_bytes,
+        },
+        "ranges": ranges.map(|offset| serde_json::json!({
+            "offset": offset,
+            "length": 4 * 1024,
+        })),
+    });
+    fs::write(
+        change_set,
+        format!(
+            "{}\n",
+            serde_json::to_string(&entry).expect("serialize sparse change set")
+        ),
+    )
+    .map_err(|error| format!("write sparse change set {}: {error}", change_set.display()))
 }
 
 fn dataset_path(root: &Path, fanout: u64, index: u64) -> PathBuf {
