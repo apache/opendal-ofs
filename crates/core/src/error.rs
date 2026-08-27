@@ -71,6 +71,10 @@ impl Error {
         Self::new(ErrorKind::Invalid, operation, message)
     }
 
+    pub(crate) fn conflict(operation: &'static str, message: impl Into<String>) -> Self {
+        Self::new(ErrorKind::Conflict, operation, message)
+    }
+
     pub(crate) fn corrupt(operation: &'static str, message: impl Into<String>) -> Self {
         Self::new(ErrorKind::Corrupt, operation, message)
     }

@@ -193,6 +193,10 @@ impl RecordStreamWriter {
         let payload_digest = self.writer.digest();
         finish_stream(self.writer, self.kind, self.payload_length, payload_digest).await
     }
+
+    pub(crate) async fn abort(mut self) {
+        let _ = self.writer.abort().await;
+    }
 }
 
 pub async fn finish_stream(
