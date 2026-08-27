@@ -22,6 +22,8 @@ use std::process::Command as StdCommand;
 use clap::Parser;
 use clap::Subcommand;
 
+mod acceptance;
+
 fn main() {
     let cmd = Command::parse();
     cmd.run();
@@ -37,6 +39,7 @@ struct Command {
 impl Command {
     fn run(self) {
         match self.sub {
+            SubCommand::Acceptance(cmd) => cmd.run(),
             SubCommand::Check(cmd) => cmd.run(),
             SubCommand::Licenses(cmd) => cmd.run(),
             SubCommand::Lint(cmd) => cmd.run(),
@@ -47,6 +50,8 @@ impl Command {
 
 #[derive(Subcommand)]
 enum SubCommand {
+    #[clap(about = "Run profile-driven Managed acceptance.")]
+    Acceptance(acceptance::CommandAcceptance),
     #[clap(about = "Check all workspace targets.")]
     Check(CommandCheck),
     #[clap(about = "Check source headers and dependency licenses.")]
