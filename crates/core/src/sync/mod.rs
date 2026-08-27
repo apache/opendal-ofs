@@ -15,20 +15,20 @@
 // specific language governing permissions and limitations
 // under the License.
 
-//! OpenDAL-backed runtime primitives for the Managed v0 format.
+//! Public request and durable replica-state contracts for Managed Sync.
 
-pub mod authority;
-pub mod data;
-mod error;
-pub mod storage;
-pub mod sync;
-pub mod volume;
-pub(crate) mod work;
+mod input;
+mod replica;
+mod state;
 
-pub use error::{Error, ErrorKind, Result};
-pub use ofs_managed_format::v0 as format;
-pub use ofs_managed_format::v0::model as filesystem;
-pub use volume::{
-    AccessFamily, CoreAccess, CreateOptions, GcOutcome, ManagedAccess, ManagedObservation,
-    ManagedVolume, VolumeRuntime,
+pub use input::{
+    ConflictResolution, FileChangeSet, FileChangeSetEntry, LocalChangeHint, SyncRequest,
 };
+pub use state::{PublicationOrigin, ReplicaPhase, ReplicaState};
+
+use crate::Error;
+
+/// Load and validate the lightweight state of one local replica.
+pub fn load_replica_state(path: &std::path::Path) -> Result<Option<ReplicaState>, Error> {
+    replica::state_store::load(path)
+}

@@ -15,20 +15,25 @@
 // specific language governing permissions and limitations
 // under the License.
 
-//! OpenDAL-backed runtime primitives for the Managed v0 format.
+//! Atomic persistence for the lightweight replica recovery record.
 
-pub mod authority;
-pub mod data;
-mod error;
-pub mod storage;
-pub mod sync;
-pub mod volume;
-pub(crate) mod work;
+use std::fs;
+use std::path::Path;
 
-pub use error::{Error, ErrorKind, Result};
-pub use ofs_managed_format::v0 as format;
-pub use ofs_managed_format::v0::model as filesystem;
-pub use volume::{
-    AccessFamily, CoreAccess, CreateOptions, GcOutcome, ManagedAccess, ManagedObservation,
-    ManagedVolume, VolumeRuntime,
-};
+use crate::Error;
+use crate::format::RecordCodec;
+
+use crate::sync::state::ReplicaState;
+
+const STATE_RECORD: RecordCodec = RecordCodec::new(*b"OFSSTA00", 16 * 1024);
+
+pub(crate) fn load(path: &Path) -> Result<Option<ReplicaState>, Error> {
+    let bytes = match fs::read(path) {
+        Ok(bytes) => bytes,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(None),
+        Err(error) => return Err(Error::from_io("read replica state", Some(path), error)),
+    };
+    let state: ReplicaState = STATE_RECORD.decode(&bytes)?;
+    state.validate()?;
+    Ok(Some(state))
+}
