@@ -27,8 +27,8 @@ use crate::Error;
 use crate::ErrorKind;
 use crate::authority::{AuthorityAccess, AuthorityObservation, DefaultAuthorityAccess};
 use crate::data::{
-    CoreDataAccess, DataAccess, ExtentCodec, FilePartitioner, RangeReader, ReusableFile,
-    validate_file_map,
+    ContentReuseLookup, CoreDataAccess, DataAccess, DataSegmentWriter, ExtentCodec,
+    FilePartitioner, RangeReader, ReusableFile, validate_file_map,
 };
 use crate::filesystem::{ChangeCursor, ContentRef, NodeId, VolumeId};
 use crate::format::{
@@ -239,6 +239,29 @@ impl<A: AccessFamily> ManagedVolume<A> {
             .memory_target_bytes()
             .saturating_div(self.stream_concurrency)
             .max(1)
+    }
+
+    pub(crate) fn data_segment_target_bytes(&self) -> u64 {
+        self.format.file_data_layout().data_segment_target_bytes()
+    }
+
+    pub(crate) fn data_placement(
+        &self,
+        gc_epoch: GcEpoch,
+        target_bytes: u64,
+        stored_payload_bound: Option<u64>,
+    ) -> DataSegmentWriter<'_> {
+        crate::data::data_segments(
+            self.operator(),
+            gc_epoch,
+            target_bytes,
+            self.multipart_part_bytes,
+            stored_payload_bound,
+        )
+    }
+
+    pub(crate) fn stored_size_bound(&self, logical_bytes: u64) -> Option<u64> {
+        self.access.data().stored_size_bound(logical_bytes)
     }
 
     /// Create a volume in empty storage, or reopen it when the same layout exists.
@@ -467,6 +490,66 @@ impl<A: AccessFamily> ManagedVolume<A> {
                 head,
             )
             .await
+    }
+
+    pub(crate) async fn known_content(
+        &self,
+        workspace: &WorkContext,
+        observed: &ManagedObservation,
+        base: &Namespace<FileExtentMap>,
+    ) -> Result<ContentReuseLookup, Error> {
+        crate::data::reuse::build_known_content(
+            self.access.data(),
+            &self.operator,
+            workspace,
+            self.stream_concurrency,
+            &observed.namespace,
+            base,
+            self.format.file_data_layout().partitioning().is_some(),
+        )
+        .await
+    }
+
+    pub(crate) async fn publish_data_into(
+        &self,
+        placement: &mut DataSegmentWriter<'_>,
+        source: &mut (impl tokio::io::AsyncRead + Send + Unpin),
+        logical_bytes: u64,
+        known: &ContentReuseLookup,
+    ) -> Result<(ContentRef, FileExtentMap, bool), Error> {
+        crate::data::publish_file(
+            self.access.data(),
+            &self.operator,
+            self.multipart_part_bytes,
+            placement,
+            source,
+            logical_bytes,
+            known,
+        )
+        .await
+    }
+
+    pub(crate) async fn publish_patch_into(
+        &self,
+        placement: &mut DataSegmentWriter<'_>,
+        source: &mut (impl tokio::io::AsyncRead + Send + Unpin),
+        file_length: u64,
+        previous: (ContentRef, FileExtentMap),
+        ranges: &[crate::format::FileRange],
+        known: &ContentReuseLookup,
+    ) -> Result<(ContentRef, FileExtentMap, bool), Error> {
+        crate::data::publish_file_patch(
+            self.access.data(),
+            &self.operator,
+            self.multipart_part_bytes,
+            placement,
+            source,
+            file_length,
+            previous,
+            ranges,
+            known,
+        )
+        .await
     }
 
     pub(crate) async fn read_extent(

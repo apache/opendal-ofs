@@ -178,4 +178,22 @@ impl ReplicaState {
         self.conflicts = 0;
         self.base_expired = false;
     }
+
+    pub(crate) fn begin_publication(
+        &mut self,
+        expected: NamespaceRevision,
+        target: NamespaceRevision,
+        operation_id: OperationId,
+        gc_epoch: GcEpoch,
+    ) -> Result<(), Error> {
+        self.phase = SyncPhase::Publishing {
+            target,
+            operation_id,
+            gc_epoch,
+        };
+        self.observed = expected;
+        self.conflicts = 0;
+        self.base_expired = false;
+        self.validate()
+    }
 }

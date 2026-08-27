@@ -1106,6 +1106,8 @@ dependencies = [
  "tempfile",
  "tokio",
  "tokio-util",
+ "unicode-casefold",
+ "unicode-normalization",
  "uuid",
  "walkdir",
 ]

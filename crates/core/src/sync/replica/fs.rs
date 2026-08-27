@@ -79,6 +79,12 @@ pub(crate) fn entries(root: &Path) -> impl Iterator<Item = Result<walkdir::DirEn
         .map(|entry| entry.map_err(|error| walk_error("walk replica directory", error)))
 }
 
+pub(crate) fn entry_metadata(entry: &walkdir::DirEntry) -> Result<std::fs::Metadata, Error> {
+    entry
+        .metadata()
+        .map_err(|error| walk_error("inspect local path", error))
+}
+
 fn walk_error(operation: &'static str, error: walkdir::Error) -> Error {
     let path = error.path().map(Path::to_path_buf);
     let source = error
