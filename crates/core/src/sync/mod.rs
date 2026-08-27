@@ -15,14 +15,17 @@
 // specific language governing permissions and limitations
 // under the License.
 
-//! Public request and durable replica-state contracts for Managed Sync.
+//! SANSIO Managed Sync: observe, plan, publish, CAS, install.
 
 mod engine;
 mod input;
 mod install;
+mod plan;
 mod publish;
+mod reconcile;
+mod recovery;
 mod rename;
-mod replica;
+pub(crate) mod replica;
 mod scan;
 mod segment_install;
 mod state;
