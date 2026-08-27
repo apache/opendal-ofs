@@ -28,6 +28,7 @@ pub(crate) mod write;
 
 pub use codec::{ContentHasher, ExtentCodec, IdentityCodec};
 pub use extent::{ExtentRunWriter, compact_file_extents};
+pub(crate) use file::{RangeBatch, RangeBatcher};
 pub use file::{ReusableFile, ReusableFileSource, logical_range, restore_file};
 pub use lookup::ContentLookup;
 pub use partition::{FilePartitioner, WholePartitioner};

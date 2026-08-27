@@ -165,6 +165,10 @@ impl<T> RangeBatch<T> {
         Ok(())
     }
 
+    pub(crate) const fn locator(&self) -> ObjectLocator {
+        self.locator
+    }
+
     pub(crate) fn stream_range(&self) -> Option<Range<u64>> {
         self.contiguous.then(|| {
             self.items
@@ -173,6 +177,10 @@ impl<T> RangeBatch<T> {
                 .range
                 .start..self.last_end
         })
+    }
+
+    pub(crate) fn into_items(self) -> Vec<RangeBatchItem<T>> {
+        self.items
     }
 
     pub(crate) async fn read(
