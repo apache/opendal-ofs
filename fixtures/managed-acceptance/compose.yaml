@@ -24,6 +24,8 @@ services:
       MINIO_ROOT_USER: minioadmin
     ports:
       - "127.0.0.1:${OFS_ACCEPTANCE_MINIO_PORT:-19000}:9000"
+    volumes:
+      - "${OFS_ACCEPTANCE_MINIO_DATA:?OFS_ACCEPTANCE_MINIO_DATA must be set}:/data:Z"
 
   minio-client:
     image: quay.io/minio/mc:RELEASE.2024-09-16T17-43-14Z

@@ -195,9 +195,11 @@ fn run(args: CommandAcceptance) -> Result<(), String> {
     fs::create_dir_all(&paths.replica_a).map_err(|error| format!("create replica A: {error}"))?;
     fs::create_dir_all(&paths.replica_b).map_err(|error| format!("create replica B: {error}"))?;
     fs::create_dir_all(&paths.replica_c).map_err(|error| format!("create replica C: {error}"))?;
+    fs::create_dir_all(&paths.storage)
+        .map_err(|error| format!("create fixture storage: {error}"))?;
     seed_dataset(&paths.replica_a, profile)?;
 
-    let fixture = Fixture::start()?;
+    let fixture = Fixture::start(&paths.storage)?;
     fs::create_dir_all(paths.home.join("tmp"))
         .map_err(|error| format!("create product work directory: {error}"))?;
     let product = Product::new(&paths.home, fixture.storage_url());
@@ -309,6 +311,7 @@ struct Paths {
     replica_a: PathBuf,
     replica_b: PathBuf,
     replica_c: PathBuf,
+    storage: PathBuf,
     state_a: PathBuf,
     state_b: PathBuf,
     state_c: PathBuf,
@@ -321,6 +324,7 @@ impl Paths {
             replica_a: root.join("replica-a"),
             replica_b: root.join("replica-b"),
             replica_c: root.join("replica-c"),
+            storage: root.join("storage"),
             state_a: root.join("state-a"),
             state_b: root.join("state-b"),
             state_c: root.join("state-c"),
@@ -438,6 +442,7 @@ struct Fixture {
     runtime: String,
     project: String,
     port: u16,
+    storage: PathBuf,
 }
 
 #[derive(Clone, Copy, Debug, Default, serde::Serialize)]
@@ -449,7 +454,7 @@ struct StorageShape {
 }
 
 impl Fixture {
-    fn start() -> Result<Self, String> {
+    fn start(storage: &Path) -> Result<Self, String> {
         let runtime = env::var("OFS_CONTAINER_RUNTIME").unwrap_or_else(|_| "podman".into());
         let port = env::var("OFS_ACCEPTANCE_MINIO_PORT")
             .ok()
@@ -461,6 +466,7 @@ impl Fixture {
             runtime,
             project: format!("ofs-managed-acceptance-{}", std::process::id()),
             port,
+            storage: storage.to_owned(),
         };
         let mut command = fixture.compose();
         command.args(["up", "--detach", "minio"]);
@@ -561,7 +567,8 @@ impl Fixture {
             .arg(workspace().join("fixtures/managed-acceptance/compose.yaml"))
             .arg("--project-name")
             .arg(&self.project)
-            .env("OFS_ACCEPTANCE_MINIO_PORT", self.port.to_string());
+            .env("OFS_ACCEPTANCE_MINIO_PORT", self.port.to_string())
+            .env("OFS_ACCEPTANCE_MINIO_DATA", &self.storage);
         command
     }
 }
