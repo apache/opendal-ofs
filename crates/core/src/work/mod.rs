@@ -19,6 +19,7 @@
 
 mod compact;
 mod ordered;
+mod sort;
 mod spool;
 
 use std::num::NonZeroUsize;
@@ -28,8 +29,9 @@ use crate::Error;
 
 pub(crate) use compact::RunCompactor;
 pub(crate) use ordered::{
-    AsyncOrderedMerge, AsyncOrderedRead, JoinItem, OrderedJoin, OrderedMerge, OrderedRead,
+    AsyncOrderedMerge, AsyncOrderedRead, JoinItem, OrderedJoin, OrderedMerge, OrderedRead, Unique,
 };
+pub(crate) use sort::sort;
 pub(crate) use spool::{Spool, SpoolReader, SpoolWriter};
 
 const MEBIBYTE: usize = 1024 * 1024;
@@ -86,6 +88,10 @@ impl WorkContext {
             })?),
             budget,
         })
+    }
+
+    pub(super) fn sort_run_bytes(&self) -> usize {
+        self.budget.sort_run_bytes
     }
 
     pub fn fan_in(&self) -> usize {

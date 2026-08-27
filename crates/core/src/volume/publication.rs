@@ -17,16 +17,19 @@
 
 //! Immutable namespace commits, operation receipts, and atomic publication.
 
+use serde::{Deserialize, Serialize};
+
 use crate::Error;
 use crate::ErrorKind;
 use crate::authority::AuthorityHead;
-use crate::filesystem::{ChangeCursor, OperationId};
+use crate::data::DataAccess;
+use crate::filesystem::{ChangeCursor, NamespaceRecord, NamespaceValue, OperationId};
 use crate::format::{
     COMMIT_RECORD, FileExtentMap, GcEpoch, NamespaceCommit, NamespaceRevision, NamespaceSnapshot,
     ObjectClass, OperationReceipt, OperationReceiptSegment, RecordStreamSizer,
 };
 use crate::storage::{ImmutableWriter, RecordStreamReader, RecordStreamWriter};
-use crate::work::WorkContext;
+use crate::work::{WorkContext, sort};
 
 use super::namespace::{self, Namespace};
 use super::open::{AccessFamily, ManagedObservation, ManagedVolume};
@@ -185,6 +188,131 @@ impl<A: AccessFamily> ManagedVolume<A> {
     ) -> Result<bool, Error> {
         operation_in_commit(self, operation, expected_cursor, &observed.commit).await
     }
+
+    pub(super) async fn compact_for_collection(
+        &self,
+        workspace: &WorkContext,
+        reference: NamespaceRevision,
+        gc_epoch: GcEpoch,
+        mut visit: impl FnMut(crate::format::ObjectLocator) -> Result<(), Error> + Send,
+    ) -> Result<NamespaceRevision, Error> {
+        let source = read_commit(self, reference).await?;
+        let current = namespace::read_views(self, workspace, &[(&source, source.change_cursor)])
+            .await?
+            .pop()
+            .expect("one requested namespace view is returned");
+        let mut files = workspace.writer("gc-files-by-content")?;
+        let mut compacted = workspace.writer("gc-compacted-namespace")?;
+        let mut records = current.reader()?;
+        while let Some(record) = records.next()? {
+            match record.value.as_ref().map(|node| &node.value) {
+                Some(NamespaceValue::RegularFile { content, .. }) => {
+                    files.write(&ContentFile {
+                        content: *content,
+                        record,
+                    })?;
+                }
+                _ => compacted.write(&record)?,
+            }
+        }
+        let files = sort(workspace, &files.finish()?, |file: &ContentFile| {
+            (file.content, file.record.path.clone())
+        })?;
+        let mut files = files.reader()?;
+        let mut current_content = None;
+        let mut current_data = None;
+        while let Some(mut file) = files.next()? {
+            if current_content != Some(file.content) {
+                let data = file_data(&file.record)?.clone();
+                crate::data::validate_file_map(&data, file.content, self.file_decoding_count())?;
+                let data = crate::data::compact_file_extents(
+                    &data,
+                    self.operator(),
+                    gc_epoch,
+                    self.multipart_part_bytes(),
+                    |mapping| {
+                        self.access().data().validate_extent(&mapping.extent)?;
+                        visit(mapping.extent.stored_range.segment)
+                    },
+                )
+                .await?;
+                mark_file_data_objects(&data, &mut visit)?;
+                current_content = Some(file.content);
+                current_data = Some(data);
+            }
+            *file_data_mut(&mut file.record)? = current_data
+                .clone()
+                .expect("a content group has compacted file data");
+            compacted.write(&file.record)?;
+        }
+        let entries = sort(
+            workspace,
+            &compacted.finish()?,
+            |record: &NamespaceRecord<FileExtentMap>| record.path.clone(),
+        )?;
+        let current = Namespace {
+            volume_id: current.volume_id,
+            cursor: current.cursor,
+            root: current.root,
+            entries,
+        };
+        let namespace_stream = namespace::write_snapshot(self, &current, gc_epoch).await?;
+        visit(namespace_stream.object.locator)?;
+        for receipt in &source.operation_receipts {
+            visit(receipt.stream.object.locator)?;
+        }
+        let commit = NamespaceCommit {
+            volume_id: source.volume_id,
+            change_cursor: source.change_cursor,
+            namespace_snapshot: NamespaceSnapshot {
+                change_cursor: source.change_cursor,
+                stream: namespace_stream,
+            },
+            namespace_changes: Vec::new(),
+            operation_receipts: source.operation_receipts,
+        };
+        let revision = write_commit(self, gc_epoch, &commit).await?;
+        visit(revision.object.locator)?;
+        Ok(revision)
+    }
+}
+
+#[derive(Debug, Deserialize, Serialize)]
+struct ContentFile {
+    content: crate::filesystem::ContentRef,
+    record: NamespaceRecord<FileExtentMap>,
+}
+
+fn file_data(record: &NamespaceRecord<FileExtentMap>) -> Result<&FileExtentMap, Error> {
+    match record.value.as_ref().map(|node| &node.value) {
+        Some(NamespaceValue::RegularFile { data, .. }) => Ok(data),
+        _ => Err(Error::corrupt(
+            "compact Managed namespace",
+            "content-ordered record is not a regular file",
+        )),
+    }
+}
+
+fn file_data_mut(record: &mut NamespaceRecord<FileExtentMap>) -> Result<&mut FileExtentMap, Error> {
+    match record.value.as_mut().map(|node| &mut node.value) {
+        Some(NamespaceValue::RegularFile { data, .. }) => Ok(data),
+        _ => Err(Error::corrupt(
+            "compact Managed namespace",
+            "content-ordered record is not a regular file",
+        )),
+    }
+}
+
+fn mark_file_data_objects(
+    data: &FileExtentMap,
+    visit: &mut (impl FnMut(crate::format::ObjectLocator) -> Result<(), Error> + Send),
+) -> Result<(), Error> {
+    for run in data.runs() {
+        if let Some(tail) = run.continuation {
+            visit(tail.object.locator)?;
+        }
+    }
+    Ok(())
 }
 
 async fn write_operation_receipts<A: AccessFamily>(

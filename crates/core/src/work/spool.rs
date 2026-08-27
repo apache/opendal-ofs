@@ -21,6 +21,7 @@ use std::marker::PhantomData;
 use std::path::PathBuf;
 use std::sync::Arc;
 
+use futures::Stream;
 use serde::Serialize;
 use serde::de::DeserializeOwned;
 
@@ -56,6 +57,15 @@ impl<T> Clone for Spool<T> {
 impl<T: DeserializeOwned> Spool<T> {
     pub(crate) fn reader(&self) -> Result<SpoolReader<T>, Error> {
         SpoolReader::open(self.file.clone())
+    }
+
+    /// Read this bounded spill through asynchronous stream combinators.
+    pub(crate) fn stream(&self) -> Result<impl Stream<Item = Result<T, Error>> + use<T>, Error> {
+        let reader = self.reader()?;
+        Ok(futures::stream::try_unfold(
+            reader,
+            |mut reader| async move { Ok(reader.next()?.map(|record| (record, reader))) },
+        ))
     }
 }
 

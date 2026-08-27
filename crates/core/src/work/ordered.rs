@@ -36,6 +36,44 @@ pub(crate) trait AsyncOrderedRead {
     fn next(&mut self) -> impl Future<Output = Result<Option<Self::Item>, Error>>;
 }
 
+/// Remove adjacent duplicate keys from an ordered input.
+pub(crate) struct Unique<R, F, K> {
+    source: R,
+    key: F,
+    previous: Option<K>,
+}
+
+impl<R, F, K> Unique<R, F, K> {
+    pub(crate) const fn new(source: R, key: F) -> Self {
+        Self {
+            source,
+            key,
+            previous: None,
+        }
+    }
+}
+
+impl<R, F, K> OrderedRead for Unique<R, F, K>
+where
+    R: OrderedRead,
+    F: Fn(&R::Item) -> K,
+    K: Eq,
+{
+    type Item = R::Item;
+
+    fn next(&mut self) -> Result<Option<Self::Item>, Error> {
+        while let Some(item) = self.source.next()? {
+            let key = (self.key)(&item);
+            if self.previous.as_ref() == Some(&key) {
+                continue;
+            }
+            self.previous = Some(key);
+            return Ok(Some(item));
+        }
+        Ok(None)
+    }
+}
+
 /// The next item from a merge join of two ordered inputs.
 pub(crate) enum JoinItem<L, R> {
     Left(L),
@@ -176,6 +214,10 @@ where
 
     pub(crate) fn peek_key(&self) -> Option<&K> {
         self.pending.peek_key()
+    }
+
+    pub(crate) fn next(&mut self) -> Result<Option<T>, Error> {
+        Ok(self.next_with_source()?.map(|(_, value)| value))
     }
 
     pub(crate) fn next_with_source(&mut self) -> Result<Option<(usize, T)>, Error> {

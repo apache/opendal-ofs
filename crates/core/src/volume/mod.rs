@@ -17,10 +17,12 @@
 
 //! Managed volume use cases.
 
+mod gc;
 mod namespace;
 mod open;
 mod publication;
 
+pub use gc::GcOutcome;
 pub use namespace::{Namespace, NamespaceReader};
 pub use open::{
     AccessFamily, CoreAccess, CreateOptions, ManagedAccess, ManagedObservation, ManagedVolume,

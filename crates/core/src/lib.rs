@@ -28,6 +28,6 @@ pub use error::{Error, ErrorKind, Result};
 pub use ofs_managed_format::v0 as format;
 pub use ofs_managed_format::v0::model as filesystem;
 pub use volume::{
-    AccessFamily, CoreAccess, CreateOptions, ManagedAccess, ManagedObservation, ManagedVolume,
-    VolumeRuntime,
+    AccessFamily, CoreAccess, CreateOptions, GcOutcome, ManagedAccess, ManagedObservation,
+    ManagedVolume, VolumeRuntime,
 };
