@@ -31,7 +31,7 @@ pub(crate) use compact::RunCompactor;
 pub(crate) use ordered::{
     AsyncOrderedMerge, AsyncOrderedRead, JoinItem, OrderedJoin, OrderedMerge, OrderedRead, Unique,
 };
-pub(crate) use sort::sort;
+pub(crate) use sort::{merge_sorted, sort};
 pub(crate) use spool::{Spool, SpoolReader, SpoolWriter};
 
 const MEBIBYTE: usize = 1024 * 1024;
@@ -88,6 +88,10 @@ impl WorkContext {
             })?),
             budget,
         })
+    }
+
+    pub fn path(&self) -> &std::path::Path {
+        self.workspace.path()
     }
 
     pub(super) fn sort_run_bytes(&self) -> usize {

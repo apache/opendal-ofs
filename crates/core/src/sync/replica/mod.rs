@@ -16,4 +16,5 @@
 // under the License.
 
 pub(crate) mod fs;
+pub(crate) mod scan;
 pub(super) mod state_store;

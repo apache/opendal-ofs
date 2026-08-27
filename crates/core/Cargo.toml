@@ -35,6 +35,8 @@ serde = { version = "1", features = ["derive"] }
 tempfile = "3"
 tokio = { version = "1", features = ["fs", "io-util"] }
 tokio-util.workspace = true
+unicode-casefold = "0.2"
+unicode-normalization = "0.1"
 uuid = { version = "1", features = ["v4"] }
 walkdir = "2.5"
 

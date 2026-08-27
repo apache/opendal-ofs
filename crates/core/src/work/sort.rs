@@ -70,6 +70,23 @@ where
         .map_or_else(|| workspace.writer("sorted")?.finish(), Ok)
 }
 
+pub(crate) fn merge_sorted<T, K>(
+    workspace: &WorkContext,
+    inputs: Vec<Spool<T>>,
+    key: impl Fn(&T) -> K + Copy,
+) -> Result<Spool<T>, Error>
+where
+    T: DeserializeOwned + Serialize,
+    K: Ord,
+{
+    let mut runs = RunCompactor::new(workspace.fan_in());
+    for input in inputs {
+        runs.push(input, |runs| merge_runs(workspace, runs, key))?;
+    }
+    runs.finish(|runs| merge_runs(workspace, runs, key))?
+        .map_or_else(|| workspace.writer("merged")?.finish(), Ok)
+}
+
 fn merge_runs<T, K>(
     workspace: &WorkContext,
     runs: &[Spool<T>],

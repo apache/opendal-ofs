@@ -20,7 +20,10 @@
 mod engine;
 mod input;
 mod install;
+mod publish;
+mod rename;
 mod replica;
+mod scan;
 mod segment_install;
 mod state;
 mod transfer;

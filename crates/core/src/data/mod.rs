@@ -23,6 +23,7 @@ mod file;
 mod lookup;
 mod partition;
 mod range;
+pub(crate) mod reuse;
 mod segment;
 pub(crate) mod write;
 
@@ -33,6 +34,7 @@ pub use file::{ReusableFile, ReusableFileSource, logical_range, restore_file};
 pub use lookup::ContentLookup;
 pub use partition::{FilePartitioner, WholePartitioner};
 pub use range::RangeReader;
+pub use reuse::ContentReuseLookup;
 pub use segment::DataSegmentWriter;
 pub use write::{data_segments, publish_file, publish_file_patch};
 
