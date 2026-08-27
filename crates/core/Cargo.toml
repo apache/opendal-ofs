@@ -16,26 +16,33 @@
 # under the License.
 
 [package]
-name = "x"
-version = "0.0.0"
-
+description = "Managed filesystem core for Apache OpenDAL File System"
 edition.workspace = true
-homepage.workspace = true
 license.workspace = true
+name = "ofs-core"
 publish = false
 repository.workspace = true
 rust-version.workspace = true
-
-[package.metadata.release]
-release = false
+version = "0.0.24"
 
 [dependencies]
 blake3.workspace = true
-clap = { workspace = true }
+ciborium = "0.2"
+futures.workspace = true
+ofs-managed-format = { path = "../managed-format" }
+opendal = "0.57.0"
 serde = { version = "1", features = ["derive"] }
-serde_json = "1"
 tempfile = "3"
-which = { workspace = true }
+tokio = { version = "1", features = ["fs", "io-util"] }
+tokio-util.workspace = true
+unicode-casefold = "0.2"
+unicode-normalization = "0.1"
+uuid = { version = "1", features = ["v4"] }
+walkdir = "2.5"
+
+[dev-dependencies]
+opendal = { version = "0.57.0", features = ["services-fs"] }
+tokio = { version = "1", features = ["macros", "rt-multi-thread"] }
 
 [lints]
 workspace = true

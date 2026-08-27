@@ -15,27 +15,22 @@
 # specific language governing permissions and limitations
 # under the License.
 
-[package]
-name = "x"
-version = "0.0.0"
+services:
+  minio:
+    image: quay.io/minio/minio:RELEASE.2024-09-22T00-33-43Z
+    command: server /data
+    environment:
+      MINIO_ROOT_PASSWORD: minioadmin
+      MINIO_ROOT_USER: minioadmin
+    ports:
+      - "127.0.0.1:${OFS_ACCEPTANCE_MINIO_PORT:-19000}:9000"
+    volumes:
+      - "${OFS_ACCEPTANCE_MINIO_DATA:?OFS_ACCEPTANCE_MINIO_DATA must be set}:/data:Z"
 
-edition.workspace = true
-homepage.workspace = true
-license.workspace = true
-publish = false
-repository.workspace = true
-rust-version.workspace = true
-
-[package.metadata.release]
-release = false
-
-[dependencies]
-blake3.workspace = true
-clap = { workspace = true }
-serde = { version = "1", features = ["derive"] }
-serde_json = "1"
-tempfile = "3"
-which = { workspace = true }
-
-[lints]
-workspace = true
+  minio-client:
+    image: quay.io/minio/mc:RELEASE.2024-09-16T17-43-14Z
+    entrypoint: mc
+    environment:
+      MC_HOST_local: http://minioadmin:minioadmin@minio:9000
+      MC_NO_COLOR: "1"
+      MC_QUIET: "1"

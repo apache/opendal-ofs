@@ -15,8 +15,8 @@
 # specific language governing permissions and limitations
 # under the License.
 
-exclude = ["target/**"]
-include = ["Cargo.toml", "**/*.toml"]
+exclude = [".local/**", "target/**"]
+include = ["*.toml", "crates/**/Cargo.toml", "xtask/Cargo.toml"]
 
 [formatting]
 align_entries = false
