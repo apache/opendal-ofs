@@ -213,7 +213,10 @@ fn run(args: CommandAcceptance) -> Result<(), String> {
     let cold_restore_ms = timed(|| product.sync(&paths.replica_b, &paths.state_b))?;
     require_same_tree(&paths.replica_a, &paths.replica_b, "cold restore")?;
 
-    let reconcile_started = Instant::now();
+    let no_changes = paths.home.join("changes-none.ndjson");
+    fs::write(&no_changes, [])
+        .map_err(|error| format!("create empty change set {}: {error}", no_changes.display()))?;
+    let mut reconcile_ms = 0;
     let mut sparse_publish_ms = None;
     for generation in 0..profile.generations {
         let change_set = mutate_dataset(
@@ -222,6 +225,7 @@ fn run(args: CommandAcceptance) -> Result<(), String> {
             profile,
             generation,
         )?;
+        let reconcile_started = Instant::now();
         let publish_started = Instant::now();
         match change_set {
             Some(change_set) => {
@@ -232,10 +236,10 @@ fn run(args: CommandAcceptance) -> Result<(), String> {
         if matches!(profile.name, ProfileName::LargeFiles) {
             sparse_publish_ms = Some(publish_started.elapsed().as_millis());
         }
-        product.sync(&paths.replica_b, &paths.state_b)?;
+        product.sync_changes(&paths.replica_b, &paths.state_b, &no_changes)?;
+        reconcile_ms += reconcile_started.elapsed().as_millis();
         require_same_tree(&paths.replica_a, &paths.replica_b, "reconciliation")?;
     }
-    let reconcile_ms = reconcile_started.elapsed().as_millis();
 
     let before_noop = product.status(&paths.replica_a, &paths.state_a)?;
     product.sync(&paths.replica_a, &paths.state_a)?;
@@ -603,21 +607,73 @@ fn mutate_dataset(
         sparse_mutate(root, change_set, profile, generation)?;
         return Ok(Some(change_set.to_owned()));
     }
+    let mut changes = matches!(profile.name, ProfileName::TinyFiles)
+        .then(|| {
+            fs::File::create(change_set)
+                .map_err(|error| format!("create change set {}: {error}", change_set.display()))
+        })
+        .transpose()?;
     for ordinal in 0..profile.changes {
         let index = profile
             .seed
             .wrapping_add(generation.wrapping_mul(profile.changes))
             .wrapping_add(ordinal)
             % profile.files;
+        let relative = dataset_path(Path::new(""), profile.directory_fanout, index);
+        let path = root.join(&relative);
+        let base = changes.as_ref().map(|_| hash_file(&path)).transpose()?;
         write_profile_file(
-            &dataset_path(root, profile.directory_fanout, index),
+            &path,
             profile,
             profile.files + generation * profile.changes + ordinal,
         )?;
+        if let (Some(changes), Some(base)) = (&mut changes, base) {
+            let entry = serde_json::json!({
+                "path": relative.to_string_lossy(),
+                "base": {
+                    "digest": base.to_hex().to_string(),
+                    "length": profile.file_bytes,
+                },
+                "ranges": [{
+                    "offset": 0,
+                    "length": profile.file_bytes,
+                }],
+            });
+            writeln!(
+                changes,
+                "{}",
+                serde_json::to_string(&entry).expect("serialize tiny-file change set")
+            )
+            .map_err(|error| format!("write change set {}: {error}", change_set.display()))?;
+        }
     }
     let created = root.join(format!("created/generation-{generation:04}.bin"));
     write_profile_file(&created, profile, u64::MAX.wrapping_sub(generation))?;
-    Ok(None)
+    if let Some(changes) = &mut changes {
+        changes
+            .flush()
+            .map_err(|error| format!("flush change set {}: {error}", change_set.display()))?;
+        Ok(Some(change_set.to_owned()))
+    } else {
+        Ok(None)
+    }
+}
+
+fn hash_file(path: &Path) -> Result<blake3::Hash, String> {
+    let mut input = fs::File::open(path)
+        .map_err(|error| format!("open mutation base {}: {error}", path.display()))?;
+    let mut hasher = blake3::Hasher::new();
+    let mut buffer = [0_u8; 1024 * 1024];
+    loop {
+        let length = input
+            .read(&mut buffer)
+            .map_err(|error| format!("hash mutation base {}: {error}", path.display()))?;
+        if length == 0 {
+            break;
+        }
+        hasher.update(&buffer[..length]);
+    }
+    Ok(hasher.finalize())
 }
 
 fn sparse_mutate(
