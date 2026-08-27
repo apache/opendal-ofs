@@ -197,6 +197,8 @@ fn run(args: CommandAcceptance) -> Result<(), String> {
     seed_dataset(&paths.replica_a, profile)?;
 
     let fixture = Fixture::start()?;
+    fs::create_dir_all(paths.home.join("tmp"))
+        .map_err(|error| format!("create product work directory: {error}"))?;
     let product = Product::new(&paths.home, fixture.storage_url());
     product.create_volume()?;
 
@@ -373,6 +375,7 @@ impl Product {
         let mut command = Command::new(&self.binary);
         command
             .env("OFS_HOME", &self.home)
+            .env("TMPDIR", self.home.join("tmp"))
             .env("AWS_ACCESS_KEY_ID", "minioadmin")
             .env("AWS_SECRET_ACCESS_KEY", "minioadmin")
             .env("AWS_REGION", "us-east-1")
