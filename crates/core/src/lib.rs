@@ -17,6 +17,7 @@
 
 //! OpenDAL-backed runtime primitives for the Managed v0 format.
 
+pub mod authority;
 pub mod data;
 mod error;
 pub mod storage;
