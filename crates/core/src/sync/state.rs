@@ -150,6 +150,19 @@ impl ReplicaState {
         self.base_expired
     }
 
+    pub(crate) const fn pending_publication(
+        &self,
+    ) -> Option<(NamespaceRevision, NamespaceRevision, OperationId, GcEpoch)> {
+        match self.phase {
+            SyncPhase::Publishing {
+                target,
+                operation_id,
+                gc_epoch,
+            } => Some((self.observed, target, operation_id, gc_epoch)),
+            _ => None,
+        }
+    }
+
     pub(crate) const fn installation(&self) -> Option<(NamespaceRevision, bool)> {
         match self.phase {
             SyncPhase::Installing { published } => Some((self.observed, published)),
@@ -160,7 +173,8 @@ impl ReplicaState {
     pub(crate) const fn resume_revision(&self) -> NamespaceRevision {
         match self.phase {
             SyncPhase::Clean => self.common,
-            SyncPhase::Publishing { .. } | SyncPhase::Installing { .. } => self.observed,
+            SyncPhase::Publishing { .. } => self.observed,
+            SyncPhase::Installing { .. } => self.observed,
         }
     }
 
@@ -172,11 +186,18 @@ impl ReplicaState {
         self.base_expired = false;
     }
 
-    pub(crate) fn begin_install(&mut self, target: NamespaceRevision, published: bool) {
-        self.phase = SyncPhase::Installing { published };
-        self.observed = target;
-        self.conflicts = 0;
-        self.base_expired = false;
+    pub(crate) fn rebase_equivalent(&mut self, common: NamespaceRevision) -> Result<(), Error> {
+        if !matches!(self.phase, SyncPhase::Clean)
+            || common.cursor().sequence() != self.common.cursor().sequence()
+        {
+            return Err(Error::corrupt(
+                "synchronize replica",
+                "equivalent namespace rebase changed the logical cursor",
+            ));
+        }
+        self.common = common;
+        self.observed = common;
+        self.validate()
     }
 
     pub(crate) fn begin_publication(
@@ -195,5 +216,33 @@ impl ReplicaState {
         self.conflicts = 0;
         self.base_expired = false;
         self.validate()
+    }
+
+    pub(crate) fn begin_install(&mut self, target: NamespaceRevision, published: bool) {
+        self.phase = SyncPhase::Installing { published };
+        self.observed = target;
+        self.conflicts = 0;
+        self.base_expired = false;
+    }
+
+    pub(crate) fn retain_conflicts(
+        &mut self,
+        conflicts: usize,
+        remote: NamespaceRevision,
+        base_expired: bool,
+    ) {
+        self.phase = SyncPhase::Clean;
+        self.conflicts = conflicts.try_into().unwrap_or(u64::MAX);
+        self.observed = remote;
+        self.base_expired = base_expired;
+    }
+
+    pub(crate) fn cancel_pending(&mut self, remote: NamespaceRevision) {
+        self.phase = SyncPhase::Clean;
+        if remote.cursor().sequence() == self.common.cursor().sequence() {
+            self.common = remote;
+        }
+        self.observed = remote;
+        self.base_expired = false;
     }
 }
