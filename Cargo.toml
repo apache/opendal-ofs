@@ -31,7 +31,7 @@ repository.workspace = true
 rust-version.workspace = true
 
 [workspace]
-members = [".", "crates/managed-format", "xtask"]
+members = [".", "crates/core", "crates/managed-format", "xtask"]
 resolver = "3"
 
 [workspace.package]
@@ -44,6 +44,8 @@ rust-version = "1.91.0"
 [workspace.dependencies]
 blake3 = "1"
 clap = { version = "4.6.5", features = ["derive"] }
+futures = "0.3"
+tokio-util = { version = "0.7", features = ["io"] }
 which = { version = "8.0.5" }
 
 [workspace.metadata.release]
