@@ -28,4 +28,8 @@ allow = [
   "Unicode-3.0",
   "Zlib",
 ]
+exceptions = [
+  # Root certificate data used by OpenDAL's TLS stack.
+  { crate = "webpki-root-certs", allow = ["CDLA-Permissive-2.0"] },
+]
 unused-allowed-license = "allow"
