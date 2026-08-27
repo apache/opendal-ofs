@@ -20,7 +20,6 @@ use std::path::Path;
 use tokio::fs::File;
 
 use crate::Error;
-use crate::data::ContentHasher;
 use crate::data::ReusableFile;
 use crate::filesystem::ContentRef;
 use crate::format::FileExtentMap;
@@ -34,7 +33,6 @@ pub(super) async fn materialize_file<A: AccessFamily>(
     destination: &Path,
     executable: bool,
 ) -> Result<(), Error> {
-    let expected = content.0;
     crate::sync::replica::fs::install_file(destination, executable, async |destination_file| {
         let mut source = match reusable {
             Some(reference) => Some((
@@ -49,21 +47,9 @@ pub(super) async fn materialize_file<A: AccessFamily>(
             reference: reference.clone(),
             source,
         });
-        let mut materialized = ContentHasher::default();
-        {
-            let mut writer = tokio_util::io::InspectWriter::new(destination_file, |bytes| {
-                materialized.observe(bytes)
-            });
-            volume.read_data(content, .., reusable, &mut writer).await?;
-        }
-        if materialized.content() == expected {
-            Ok(())
-        } else {
-            Err(Error::conflict(
-                "install Managed file",
-                "materialized bytes do not match the target content",
-            ))
-        }
+        volume
+            .read_data(content, .., reusable, destination_file)
+            .await
     })
     .await
     .map_err(|error| error.with_context("path", destination.display()))
