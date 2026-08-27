@@ -16,51 +16,25 @@
 # under the License.
 
 [package]
-categories = ["filesystem"]
-description = "Apache OpenDAL File System"
-keywords = ["storage", "filesystem"]
-name = "ofs"
-version = "0.0.24"
-
-authors = ["Apache OpenDAL <dev@opendal.apache.org>"]
+description = "Managed v0 storage format for Apache OpenDAL File System"
 edition.workspace = true
-homepage.workspace = true
 license.workspace = true
+name = "ofs-managed-format"
 publish = false
 repository.workspace = true
 rust-version.workspace = true
+version = "0.0.24"
 
-[workspace]
-members = [".", "crates/managed-format", "xtask"]
-resolver = "3"
+[dependencies]
+blake3.workspace = true
+ciborium = "0.2"
+serde = { version = "1", features = ["derive"] }
+unicode-casefold = "0.2"
+unicode-normalization = "0.1"
+uuid = { version = "1", features = ["v4"] }
 
-[workspace.package]
-edition = "2024"
-homepage = "https://opendal.apache.org/"
-license = "Apache-2.0"
-repository = "https://github.com/apache/opendal-ofs"
-rust-version = "1.91.0"
-
-[workspace.dependencies]
-blake3 = "1"
-clap = { version = "4.6.5", features = ["derive"] }
-which = { version = "8.0.5" }
-
-[workspace.metadata.release]
-pre-release-commit-message = "chore: release v{{version}}"
-shared-version = true
-sign-tag = true
-tag-name = "v{{version}}"
-
-[workspace.lints.rust]
-unknown_lints = "deny"
-unsafe_code = "deny"
-unused_must_use = "deny"
-
-[workspace.lints.clippy]
-dbg_macro = "deny"
-too_many_arguments = "allow"
-type_complexity = "allow"
+[dev-dependencies]
+insta = "1.48"
 
 [lints]
 workspace = true
