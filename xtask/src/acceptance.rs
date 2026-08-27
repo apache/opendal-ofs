@@ -172,6 +172,9 @@ struct Evidence<'a> {
     cold_restore_ms: u128,
     reconcile_ms: u128,
     post_gc_restore_ms: u128,
+    initial_storage: StorageShape,
+    final_storage: StorageShape,
+    replica_state_bytes: u64,
     volume_id: &'a str,
     result: &'static str,
 }
@@ -196,6 +199,7 @@ fn run(args: CommandAcceptance) -> Result<(), String> {
     let initial_publish_ms = timed(|| product.sync(&paths.replica_a, &paths.state_a))?;
     let initial = product.status(&paths.replica_a, &paths.state_a)?;
     require_clean(&initial)?;
+    let initial_storage = fixture.storage_shape()?;
 
     let cold_restore_ms = timed(|| product.sync(&paths.replica_b, &paths.state_b))?;
     require_same_tree(&paths.replica_a, &paths.replica_b, "cold restore")?;
@@ -239,6 +243,15 @@ fn run(args: CommandAcceptance) -> Result<(), String> {
         cold_restore_ms,
         reconcile_ms,
         post_gc_restore_ms,
+        initial_storage,
+        final_storage: fixture.storage_shape()?,
+        replica_state_bytes: [&paths.state_a, &paths.state_b, &paths.state_c]
+            .into_iter()
+            .try_fold(0_u64, |total, path| {
+                fs::metadata(path)
+                    .map(|metadata| total.saturating_add(metadata.len()))
+                    .map_err(|error| format!("inspect replica state {}: {error}", path.display()))
+            })?,
         volume_id: &final_status.volume_id,
         result: "passed",
     };
@@ -391,6 +404,14 @@ struct Fixture {
     port: u16,
 }
 
+#[derive(Clone, Copy, Debug, Default, serde::Serialize)]
+struct StorageShape {
+    data_objects: u64,
+    data_bytes: u64,
+    metadata_objects: u64,
+    metadata_bytes: u64,
+}
+
 impl Fixture {
     fn start() -> Result<Self, String> {
         let runtime = env::var("OFS_CONTAINER_RUNTIME").unwrap_or_else(|_| "podman".into());
@@ -441,6 +462,58 @@ impl Fixture {
             "s3://managed-sync/acceptance?endpoint=http%3A%2F%2F127.0.0.1%3A{}&region=us-east-1",
             self.port
         )
+    }
+
+    fn storage_shape(&self) -> Result<StorageShape, String> {
+        let mut command = self.compose();
+        command.args([
+            "run",
+            "--rm",
+            "--no-deps",
+            "-T",
+            "minio-client",
+            "du",
+            "--recursive",
+            "--depth",
+            "3",
+            "--json",
+            "local/managed-sync/acceptance/managed/0/objects",
+        ]);
+        let output = require_success(command, "inspect Managed storage shape")?;
+        let mut shape = StorageShape::default();
+        for line in output.stdout.split(|byte| *byte == b'\n') {
+            if line.is_empty() {
+                continue;
+            }
+            let document: serde_json::Value = serde_json::from_slice(line)
+                .map_err(|error| format!("decode Managed storage shape: {error}"))?;
+            let Some(prefix) = document["prefix"].as_str() else {
+                return Err("Managed storage shape prefix is missing".into());
+            };
+            let Some(relative) = prefix.strip_prefix("managed-sync/acceptance/managed/0/objects/")
+            else {
+                continue;
+            };
+            let mut parts = relative.split('/');
+            let (Some(_epoch), Some(class), None) = (parts.next(), parts.next(), parts.next())
+            else {
+                continue;
+            };
+            let objects = document["objects"]
+                .as_u64()
+                .ok_or_else(|| "Managed storage object count is missing".to_owned())?;
+            let bytes = document["size"]
+                .as_u64()
+                .ok_or_else(|| "Managed storage byte count is missing".to_owned())?;
+            if class == "04-data-segment" {
+                shape.data_objects = shape.data_objects.saturating_add(objects);
+                shape.data_bytes = shape.data_bytes.saturating_add(bytes);
+            } else {
+                shape.metadata_objects = shape.metadata_objects.saturating_add(objects);
+                shape.metadata_bytes = shape.metadata_bytes.saturating_add(bytes);
+            }
+        }
+        Ok(shape)
     }
 
     fn compose(&self) -> Command {
