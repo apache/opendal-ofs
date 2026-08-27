@@ -17,10 +17,15 @@
 
 //! Public request and durable replica-state contracts for Managed Sync.
 
+mod engine;
 mod input;
+mod install;
 mod replica;
+mod segment_install;
 mod state;
+mod transfer;
 
+pub use engine::{SyncEngine, SyncOutcome};
 pub use input::{
     ConflictResolution, FileChangeSet, FileChangeSetEntry, LocalChangeHint, SyncRequest,
 };

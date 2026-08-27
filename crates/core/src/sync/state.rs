@@ -67,6 +67,26 @@ pub enum SyncPhase {
 }
 
 impl ReplicaState {
+    pub(crate) fn new(
+        root: PathBuf,
+        volume_id: VolumeId,
+        authority_id: AuthorityId,
+        authority_name: String,
+        common: NamespaceRevision,
+    ) -> Self {
+        Self {
+            root,
+            volume_id,
+            authority_id,
+            authority_name,
+            common,
+            observed: common,
+            phase: SyncPhase::Clean,
+            conflicts: 0,
+            base_expired: false,
+        }
+    }
+
     pub(super) fn validate(&self) -> Result<(), Error> {
         if self.observed.cursor().sequence() < self.common.cursor().sequence() {
             return Err(Error::invalid(
@@ -128,5 +148,34 @@ impl ReplicaState {
 
     pub const fn base_expired(&self) -> bool {
         self.base_expired
+    }
+
+    pub(crate) const fn installation(&self) -> Option<(NamespaceRevision, bool)> {
+        match self.phase {
+            SyncPhase::Installing { published } => Some((self.observed, published)),
+            _ => None,
+        }
+    }
+
+    pub(crate) const fn resume_revision(&self) -> NamespaceRevision {
+        match self.phase {
+            SyncPhase::Clean => self.common,
+            SyncPhase::Publishing { .. } | SyncPhase::Installing { .. } => self.observed,
+        }
+    }
+
+    pub(crate) fn advance(&mut self, common: NamespaceRevision) {
+        self.common = common;
+        self.observed = common;
+        self.phase = SyncPhase::Clean;
+        self.conflicts = 0;
+        self.base_expired = false;
+    }
+
+    pub(crate) fn begin_install(&mut self, target: NamespaceRevision, published: bool) {
+        self.phase = SyncPhase::Installing { published };
+        self.observed = target;
+        self.conflicts = 0;
+        self.base_expired = false;
     }
 }

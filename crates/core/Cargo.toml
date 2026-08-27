@@ -33,9 +33,10 @@ ofs-managed-format = { path = "../managed-format" }
 opendal = "0.57.0"
 serde = { version = "1", features = ["derive"] }
 tempfile = "3"
-tokio = { version = "1", features = ["io-util"] }
+tokio = { version = "1", features = ["fs", "io-util"] }
 tokio-util.workspace = true
 uuid = { version = "1", features = ["v4"] }
+walkdir = "2.5"
 
 [dev-dependencies]
 opendal = { version = "0.57.0", features = ["services-fs"] }

@@ -18,14 +18,19 @@
 //! Create and open a Managed volume from its experimental v0 format.
 
 use std::num::NonZeroUsize;
+use std::ops::RangeBounds;
 
 use opendal::Operator;
+use tokio::io::AsyncWrite;
 
 use crate::Error;
 use crate::ErrorKind;
 use crate::authority::{AuthorityAccess, AuthorityObservation, DefaultAuthorityAccess};
-use crate::data::{CoreDataAccess, DataAccess, ExtentCodec, FilePartitioner};
-use crate::filesystem::{ChangeCursor, NodeId, VolumeId};
+use crate::data::{
+    CoreDataAccess, DataAccess, ExtentCodec, FilePartitioner, RangeReader, ReusableFile,
+    validate_file_map,
+};
+use crate::filesystem::{ChangeCursor, ContentRef, NodeId, VolumeId};
 use crate::format::{
     FORMAT_KEY, FORMAT_RECORD, FileDataLayout, FileExtentMap, GcEpoch, NamespaceCommit,
     NamespaceRevision, VolumeFormat,
@@ -227,6 +232,13 @@ impl<A: AccessFamily> ManagedVolume<A> {
 
     pub(crate) fn file_decoding_count(&self) -> usize {
         self.access.data().decoding_count()
+    }
+
+    pub(crate) fn transfer_window_bytes(&self) -> usize {
+        self.work_budget
+            .memory_target_bytes()
+            .saturating_div(self.stream_concurrency)
+            .max(1)
     }
 
     /// Create a volume in empty storage, or reopen it when the same layout exists.
@@ -455,6 +467,45 @@ impl<A: AccessFamily> ManagedVolume<A> {
                 head,
             )
             .await
+    }
+
+    pub(crate) async fn read_extent(
+        &self,
+        reader: &mut RangeReader,
+        reference: crate::format::ExtentRef,
+        range: std::ops::Range<u64>,
+        destination: &mut (impl AsyncWrite + Send + Unpin),
+    ) -> Result<(), Error> {
+        let destination: &mut (dyn AsyncWrite + Send + Unpin) = destination;
+        self.access
+            .data()
+            .codec()
+            .decode(reader, reference, range, destination)
+            .await
+    }
+
+    pub(crate) async fn read_data<'a>(
+        &'a self,
+        content: (ContentRef, FileExtentMap),
+        range: impl RangeBounds<u64>,
+        reusable: Option<ReusableFile<'a>>,
+        destination: &'a mut (impl AsyncWrite + Send + Unpin),
+    ) -> Result<(), Error> {
+        let (content, reference) = content;
+        validate_file_map(&reference, content, self.file_decoding_count())?;
+        let range = crate::data::logical_range(content.length(), range)?;
+        crate::data::restore_file(
+            self.access.data(),
+            &self.operator,
+            self.read_gap_bytes,
+            self.transfer_window_bytes(),
+            reference,
+            content,
+            range,
+            reusable,
+            destination,
+        )
+        .await
     }
 }
 

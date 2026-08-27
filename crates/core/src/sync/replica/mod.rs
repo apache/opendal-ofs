@@ -15,4 +15,5 @@
 // specific language governing permissions and limitations
 // under the License.
 
+pub(crate) mod fs;
 pub(super) mod state_store;
