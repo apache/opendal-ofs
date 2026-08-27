@@ -27,14 +27,18 @@ version = "0.0.24"
 
 [dependencies]
 blake3.workspace = true
+ciborium = "0.2"
 futures.workspace = true
 ofs-managed-format = { path = "../managed-format" }
 opendal = "0.57.0"
 serde = { version = "1", features = ["derive"] }
+tempfile = "3"
 tokio = { version = "1", features = ["io-util"] }
 tokio-util.workspace = true
+uuid = { version = "1", features = ["v4"] }
 
 [dev-dependencies]
+opendal = { version = "0.57.0", features = ["services-fs"] }
 tokio = { version = "1", features = ["macros", "rt-multi-thread"] }
 
 [lints]

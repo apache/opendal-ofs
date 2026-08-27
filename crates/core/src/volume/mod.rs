@@ -15,19 +15,16 @@
 // specific language governing permissions and limitations
 // under the License.
 
-//! OpenDAL-backed runtime primitives for the Managed v0 format.
+//! Managed volume use cases.
 
-pub mod authority;
-pub mod data;
-mod error;
-pub mod storage;
-pub mod volume;
-pub(crate) mod work;
+mod gc;
+mod namespace;
+mod open;
+mod publication;
 
-pub use error::{Error, ErrorKind, Result};
-pub use ofs_managed_format::v0 as format;
-pub use ofs_managed_format::v0::model as filesystem;
-pub use volume::{
-    AccessFamily, CoreAccess, CreateOptions, GcOutcome, ManagedAccess, ManagedObservation,
-    ManagedVolume, VolumeRuntime,
+pub use gc::GcOutcome;
+pub use namespace::{Namespace, NamespaceReader};
+pub use open::{
+    AccessFamily, CoreAccess, CreateOptions, ManagedAccess, ManagedObservation, ManagedVolume,
+    VolumeRuntime,
 };
