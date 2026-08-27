@@ -170,12 +170,17 @@ The reader copies only the covered stored ranges and applies the declared
 decodings in order. In the v0 core profile the stored bytes are the logical
 bytes, so decoding is the identity operation.
 
-When fully consumed, an object read through an `ObjectRef` is verified against
-its encoded length and whole-object digest. The current identity codec verifies
-a complete stored extent against its own `ContentRef`. Reading only part of an
-extent cannot prove that digest. The Bao-derived index discussed in Future
-possibilities addresses that gap without changing the base extent
-representation.
+For a complete file restore, the reader hashes the logical bytes once as it
+writes them, including bytes copied from a reusable local file. It reports
+success only when the resulting `ContentRef` matches the namespace record. The
+same check covers an empty file without a second read.
+
+When fully consumed, an object read through an `ObjectRef` is also verified
+against its encoded length and whole-object digest. The current identity codec
+verifies a complete stored extent against its own `ContentRef`. Reading only
+part of an extent cannot prove either the extent digest or the file-level
+digest. The Bao-derived index discussed in Future possibilities addresses that
+gap without changing the base extent representation.
 
 ## Updating a file
 
@@ -231,6 +236,37 @@ the schema. A decoder MUST reject a tuple with missing or trailing elements,
 unless a later format version explicitly changes that rule. Fixed-width
 identities are CBOR byte strings of the width listed below. Extension
 configuration is an opaque byte vector at the v0 layer.
+
+## Verification model and trust boundary
+
+The format distinguishes checks that a reader can compute from stored bytes
+from guarantees supplied by the authority or storage service:
+
+| Class | Examples | Required input |
+| --- | --- | --- |
+| Local | Magic, lengths, checksums, tuple shape, and scalar ranges | One envelope or frame |
+| Reference-bound | Object, stream-payload, and complete-extent digests | The trusted reference and all bytes in its verification unit |
+| Materialized | File identity, extent coverage, namespace ordering, and revision consistency | The complete logical file, extent map, or namespace view |
+| External | Conditional publication, create-if-absent, extension behavior, and locator pin semantics | An authority, implementation, or storage contract |
+
+A digest establishes consistency with a trusted reference. It does not
+authenticate the writer that produced the reference. The authority observation
+is the root of the reachable graph, and its authenticity depends on the
+configured authority and storage-access policy.
+
+Verification cost is part of the guarantee. A reader can verify a
+`ContentRef` only after it has observed the complete logical byte sequence, or
+when it has a proof accepted by the active format profile. A reader MUST NOT
+report a partial range as content-verified merely because the enclosing extent
+or file has a digest. A full-file restore MUST hash every logical byte written
+to its destination and MUST NOT report success unless the length and digest
+match the file's `ContentRef`. A non-transactional destination may have received
+bytes before a final mismatch is known; a filesystem installer therefore
+SHOULD stage the output until verification succeeds.
+
+An extension descriptor identifies required code and its opaque configuration.
+It does not describe the extension's algorithm. A reader still needs an
+implementation whose identity and configuration match the volume format.
 
 ## Key space
 
@@ -517,8 +553,9 @@ namespace stream MUST be strictly ordered by the UTF-8 bytes of `path`.
 The root path is the empty string. A valid materialized namespace MUST contain
 one root directory whose node ID equals `VolumeFormat.root_node_id`. A writer
 MUST compute a regular file's `ContentRef` from its complete logical byte
-sequence. The current restore path checks extent coverage and the available
-extent digests, but does not recompute the file-level digest over its output.
+sequence. A reader restoring the complete file MUST recompute that identity
+over the logical output, including reused local ranges, before it reports
+success.
 
 The namespace value tag is closed in format v0. A decoder MUST reject an
 unknown tag or a tuple with an unexpected element count.
@@ -613,13 +650,20 @@ in `VolumeFormat`, when present, may define another authority mechanism.
 
 A writer publishing revision `C + 1` MUST:
 
-1. Read and validate the current head and its selected commit at cursor `C`.
+1. Obtain and validate the current head and its selected commit at cursor `C`.
 2. Write every new data, extent, namespace, receipt, and commit object with
    create-if-absent semantics.
 3. Replace the head using a condition tied to the version observed in step 1,
    such as an ETag match.
 4. If the condition fails, read the current commit and use the operation receipt
    to distinguish an already committed operation from a conflict.
+
+The observed head body and conditional revision MUST identify the same stored
+version. A storage response that returns both values is sufficient. An
+implementation may instead read with a condition pinned to a separately
+obtained revision. An unbound object read followed by an unrelated metadata
+lookup is not one authority observation. An authority that cannot supply a
+bound observation MUST reject publication.
 
 A reader MUST treat the authority head as the visibility boundary. It MUST NOT
 discover a revision by listing immutable objects.
@@ -647,8 +691,8 @@ listing. It MUST NOT infer liveness from object age alone.
 
 ## Validation and error handling
 
-Readers MUST validate data before making it visible to higher layers. At a
-minimum this includes:
+Readers MUST perform the applicable checks and MUST NOT report unverified data
+as verified. At a minimum this includes:
 
 - canonical key spelling for an object locator;
 - envelope magic, lengths, checksums, and exact byte consumption;
@@ -656,6 +700,7 @@ minimum this includes:
 - stream kind and object-class agreement;
 - object, payload, and complete stored-range digests when their full bytes are
   read;
+- the file-level `ContentRef` when the complete logical file is restored;
 - path syntax and namespace ordering;
 - extent arithmetic, ordering, coverage, and overlay invariants; and
 - volume, cursor, and authority consistency across references.
