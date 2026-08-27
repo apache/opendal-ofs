@@ -23,6 +23,7 @@ use opendal::Operator;
 use tokio::io::{AsyncRead, AsyncReadExt as _, AsyncSeek, AsyncSeekExt as _, AsyncWrite};
 
 use crate::Error;
+use crate::data::ContentHasher;
 use crate::filesystem::ContentRef;
 use crate::format::{ExtentRef, FileExtentMap, FileRange, ObjectLocator};
 
@@ -272,12 +273,24 @@ pub async fn restore_file<A: DataAccess>(
     content: ContentRef,
     range: Range<u64>,
     reusable: Option<ReusableFile<'_>>,
-    destination: &mut (dyn AsyncWrite + Send + Unpin),
+    destination: &mut (impl AsyncWrite + Send + Unpin),
 ) -> Result<(), Error> {
     validate_file_map(&reference, content, access.decoding_count())?;
+    let complete_file = range.start == 0 && range.end == content.length();
     if range.is_empty() {
-        return Ok(());
+        return if !complete_file || ContentHasher::default().content() == content {
+            Ok(())
+        } else {
+            Err(Error::corrupt(
+                "read Managed file",
+                "restored bytes do not match the file content reference",
+            ))
+        };
     }
+    let mut restored = ContentHasher::default();
+    let mut destination =
+        tokio_util::io::InspectWriter::new(destination, |bytes| restored.observe(bytes));
+    let destination: &mut (dyn AsyncWrite + Send + Unpin) = &mut destination;
     let selection = FileRange::new(range.start, range.end - range.start)?;
     let mut mappings =
         super::extent::open_file_extents(&reference, operator, Some(selection)).await?;
@@ -415,6 +428,12 @@ pub async fn restore_file<A: DataAccess>(
         destination,
     )
     .await?;
+    if complete_file && restored.content() != content {
+        return Err(Error::corrupt(
+            "read Managed file",
+            "restored bytes do not match the file content reference",
+        ));
+    }
     Ok(())
 }
 

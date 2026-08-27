@@ -17,6 +17,7 @@
 
 //! Bounded control-object reads and conditional writes.
 
+use futures::StreamExt as _;
 use opendal::{ErrorKind as StorageErrorKind, Operator};
 use serde::{Serialize, de::DeserializeOwned};
 use std::marker::PhantomData;
@@ -70,6 +71,22 @@ where
         }))
     }
 
+    /// Read one mutable control value, requiring a bound revision when replacement supports it.
+    pub async fn observe(&self, operator: &Operator) -> Result<Option<ObservedControl<T>>, Error> {
+        let observed = self.read(operator).await?;
+        if observed
+            .as_ref()
+            .is_some_and(|observed| observed.revision.is_none())
+            && operator.info().full_capability().write_with_if_match
+        {
+            return Err(Error::unsupported(
+                "observe Managed control object",
+                "storage does not return a revision with control reads",
+            ));
+        }
+        Ok(observed)
+    }
+
     /// Encode and conditionally write one value.
     pub async fn write(
         &self,
@@ -92,24 +109,44 @@ pub(super) async fn read_bounded(
     maximum_bytes: usize,
     operation: &'static str,
 ) -> Result<Option<BoundedObject>, Error> {
-    let buffer = match operator.read(key).await {
-        Ok(buffer) => buffer,
+    let reader = match operator.reader(key).await {
+        Ok(reader) => reader,
         Err(error) if error.kind() == StorageErrorKind::NotFound => return Ok(None),
         Err(error) => return Err(Error::from_storage(operation, error)),
     };
-    if buffer.len() > maximum_bytes {
-        return Err(Error::corrupt(operation, "object exceeds its size limit"));
-    }
-    let revision = match operator.stat(key).await {
-        Ok(metadata) => metadata.etag().map(str::to_owned),
-        Err(error) if error.kind() == StorageErrorKind::NotFound => None,
-        Err(error) if error.kind() == StorageErrorKind::Unsupported => None,
+    let mut stream = match reader.into_stream(..).await {
+        Ok(stream) => stream,
+        Err(error) if error.kind() == StorageErrorKind::NotFound => return Ok(None),
         Err(error) => return Err(Error::from_storage(operation, error)),
     };
-    Ok(Some(BoundedObject {
-        bytes: buffer.to_vec(),
-        revision,
-    }))
+    let (capacity, revision) = match stream.metadata().await {
+        Ok(metadata) => {
+            let length = usize::try_from(metadata.content_length())
+                .ok()
+                .filter(|length| *length <= maximum_bytes)
+                .ok_or_else(|| Error::corrupt(operation, "object exceeds its size limit"))?;
+            (length, metadata.etag().map(str::to_owned))
+        }
+        Err(error) if error.kind() == StorageErrorKind::NotFound => return Ok(None),
+        Err(error) if error.kind() == StorageErrorKind::Unsupported => (0, None),
+        Err(error) => return Err(Error::from_storage(operation, error)),
+    };
+
+    let mut bytes = Vec::with_capacity(capacity);
+    while let Some(buffer) = stream.next().await {
+        let buffer = match buffer {
+            Ok(buffer) => buffer,
+            Err(error) if error.kind() == StorageErrorKind::NotFound => return Ok(None),
+            Err(error) => return Err(Error::from_storage(operation, error)),
+        };
+        if buffer.len() > maximum_bytes - bytes.len() {
+            return Err(Error::corrupt(operation, "object exceeds its size limit"));
+        }
+        for chunk in buffer {
+            bytes.extend_from_slice(&chunk);
+        }
+    }
+    Ok(Some(BoundedObject { bytes, revision }))
 }
 
 /// Conditionally replace one mutable control object.

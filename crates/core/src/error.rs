@@ -75,6 +75,10 @@ impl Error {
         Self::new(ErrorKind::Conflict, operation, message)
     }
 
+    pub(crate) fn unsupported(operation: &'static str, message: impl Into<String>) -> Self {
+        Self::new(ErrorKind::Unsupported, operation, message)
+    }
+
     pub(crate) fn corrupt(operation: &'static str, message: impl Into<String>) -> Self {
         Self::new(ErrorKind::Corrupt, operation, message)
     }
