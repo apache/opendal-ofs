@@ -63,7 +63,7 @@ impl AuthorityAccess for DefaultAuthorityAccess {
         name: &str,
     ) -> Result<AuthorityObservation, Error> {
         require_default(name)?;
-        let control = HEAD_RECORD.read(operator).await?.ok_or_else(|| {
+        let control = HEAD_RECORD.observe(operator).await?.ok_or_else(|| {
             Error::new(
                 crate::ErrorKind::NotFound,
                 "open Managed volume",
