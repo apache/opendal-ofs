@@ -1,19 +1,16 @@
 - Proposal Name: `filesystem_architecture`
 - Start Date: 2026-07-30
-- RFC PR: [apache/opendal-ofs#16](https://github.com/apache/opendal-ofs/pull/16)
-- Tracking Issue: [apache/opendal-ofs#19](https://github.com/apache/opendal-ofs/issues/19)
+- RFC PR: [apache/opendal-yinyang#16](https://github.com/apache/opendal-yinyang/pull/16)
+- Tracking Issue: [apache/opendal-yinyang#19](https://github.com/apache/opendal-yinyang/issues/19)
 
 > [!NOTE]
-> **Update, August 10, 2026:** `main` no longer contains the previous Direct
-> Mount implementation. Its source is preserved on the
-> [`backup`](https://github.com/apache/opendal-ofs/tree/backup) branch while the
-> new implementation is designed. The RFC below remains unchanged.
+> **Update, August 10, 2026:** `main` no longer contains the Direct Mount implementation released as Apache OpenDAL™ File System (`ofs`). Its source is preserved on the [`backup`](https://github.com/apache/opendal-yinyang/tree/backup) branch while the new implementation is designed. The architecture described below is unchanged.
 
 # Summary
 
-Define ofs as a cross-platform filesystem engine with two independent choices.
+Define Apache OpenDAL™ YinYang as a cross-platform filesystem engine with two independent choices.
 A **Volume Model** selects either `Direct`, where an existing storage namespace
-is authoritative, or `Managed`, where ofs metadata owns the filesystem
+is authoritative, or `Managed`, where YinYang metadata owns the filesystem
 namespace and storage holds immutable file data. An **Access Model** selects
 either `Mount`, which presents an online remote filesystem, or `Sync`, which
 reconciles a local native filesystem with a volume.
@@ -21,7 +18,7 @@ reconciles a local native filesystem with a volume.
 The same filesystem contract is implemented by OS-specific mount and sync
 frontends. FUSE, filesystem extensions, user-mode drivers, placeholder APIs,
 and network filesystem protocols are transports for that contract rather than
-separate ofs storage modes.
+separate YinYang storage modes.
 
 # Motivation
 
@@ -39,7 +36,7 @@ Deriving those concepts from object names is useful for browsing existing data,
 but it cannot provide the same guarantees as a namespace backed by filesystem
 metadata.
 
-ofs users need both outcomes:
+YinYang users need both outcomes:
 
 - access existing storage without importing or rewriting it;
 - use storage as the data plane for a reliable filesystem;
@@ -54,8 +51,7 @@ POSIX label for behavior that only some combinations can enforce.
 
 ## The two-axis model
 
-Every ofs volume has one Volume Model and can be accessed through either Access
-Model:
+Every YinYang volume has one Volume Model and can be accessed through either Access Model:
 
 | Volume Model | Mount | Sync |
 | --- | --- | --- |
@@ -72,11 +68,11 @@ A Direct volume maps storage paths to filesystem paths without creating
 authoritative remote metadata:
 
 ```text
-ofs volume create archive \
+yy volume create archive \
   --model direct \
   --storage <storage-url>
 
-ofs mount archive /mnt/archive --read-only
+yy mount archive /mnt/archive --read-only
 ```
 
 Objects remain readable by existing storage tools. Direct volumes are suitable
@@ -96,17 +92,17 @@ enabled explicitly.
 A Managed volume stores files through a metadata namespace:
 
 ```text
-ofs volume create workspace \
+yy volume create workspace \
   --model managed \
   --storage <storage-url>
 
-ofs mount workspace /mnt/workspace
+yy mount workspace /mnt/workspace
 ```
 
-Applications see stable files and directories. ofs metadata owns node
+Applications see stable files and directories. YinYang metadata owns node
 identity, directory entries, attributes, content versions, and generations.
 Storage contains immutable file data referenced by metadata. The storage
-prefix is private to ofs and must not be modified by external writers.
+prefix is private to YinYang and must not be modified by external writers.
 
 The metadata provider may use an embedded database, a remote database, or
 metadata objects. The deployment choice is hidden behind one transaction and
@@ -128,34 +124,34 @@ Mount and Sync have deliberately different acknowledgement semantics:
 | Conflict reporting | Filesystem error | Conflict record and retained content |
 | Local disk usage | Evictable cache and staging | Materialized tree and state database |
 
-`ofs mount` selects a frontend supported by the host. A user asks for a mount,
+`yy mount` selects a frontend supported by the host. A user asks for a mount,
 not for FUSE as a product mode:
 
 ```text
-ofs mount <volume> <mount-path>
+yy mount <volume> <mount-path>
 ```
 
 A Linux FUSE frontend, a platform filesystem extension, a user-mode driver, or
 a loopback network filesystem can implement the same Mount contract. Selecting
 a different frontend cannot strengthen the volume's capabilities.
 
-`ofs sync` reconciles a volume with an ordinary local directory:
+`yy sync` reconciles a volume with an ordinary local directory:
 
 ```text
-ofs sync <volume> <local-directory>
-ofs status <local-directory>
+yy sync <volume> <local-directory>
+yy status <local-directory>
 ```
 
 Local writes remain available while disconnected. Remote publication has a
 separate status and explicit wait operation. When both sides change from the
-same base generation and cannot be merged, ofs retains both contents and
+same base generation and cannot be merged, YinYang retains both contents and
 reports a conflict instead of choosing the last writer.
 
 ## Required contracts and optional capabilities
 
 Selecting `Direct` or `Managed` and `Mount` or `Sync` is the complete
 user-facing mode selection. Each choice contributes the mandatory contract
-described above. ofs does not add another semantic bundle that weakens or
+described above. YinYang does not add another semantic bundle that weakens or
 rebundles those guarantees; a combination that cannot satisfy its selected
 models fails to start.
 
@@ -163,12 +159,12 @@ Operations outside the baseline are reported individually. A user can require
 them when starting an access model:
 
 ```text
-ofs mount workspace /mnt/workspace \
+yy mount workspace /mnt/workspace \
   --require hard-link \
   --require xattr
 ```
 
-Missing requirements fail before the mount becomes visible. `ofs status`
+Missing requirements fail before the mount becomes visible. `yy status`
 reports effective capabilities, pending writes, conflicts, and the local and
 remote durability positions.
 
@@ -176,7 +172,7 @@ remote durability positions.
 
 ## Architecture boundaries
 
-ofs is divided into four responsibilities:
+YinYang is divided into four responsibilities:
 
 ```text
 OS frontend
@@ -199,7 +195,7 @@ baseline validation, capability reporting, cache policy, and error semantics.
 A Volume implementation owns namespace authority and publication. An OS
 frontend translates native operations without changing their guarantees.
 OpenDAL provides storage primitives and their native capabilities; it does not
-emulate filesystem transactions for ofs.
+emulate filesystem transactions for YinYang.
 
 The core contract includes these logical identities:
 
@@ -251,9 +247,9 @@ The storage namespace is the only remote authority for a Direct volume:
 - directories, inode numbers, and unsupported attributes are derived;
 - external storage writers are valid concurrent writers; and
 - local caches, indexes, staging files, and recovery journals are allowed, but
-  no remote ofs metadata becomes namespace authority.
+  no remote YinYang metadata becomes namespace authority.
 
-Pure storage means that ofs does not require an additional remote metadata
+Pure storage means that YinYang does not require an additional remote metadata
 model. It does not require stateless clients. Pending local writes and
 multi-step operations must be journaled until they are committed, cancelled,
 or recovered.
@@ -325,14 +321,14 @@ A Mount frontend presents the remote volume as the authority. Local data is an
 evictable cache or recoverable staging state.
 
 `write` may acknowledge data accepted into a local writeback cache. `flush`
-attempts publication. `fsync` succeeds only after ofs has completed remote data
+attempts publication. `fsync` succeeds only after YinYang has completed remote data
 publication and the required metadata commit according to the backend's
 acknowledged durability contract. If the network or remote commit is
 unavailable, `fsync` fails.
 
 Asynchronous writeback errors remain attached to the handle and volume. They
 are returned by a later `flush`, `fsync`, or `close` where the frontend permits,
-and are always visible through `ofs status`.
+and are always visible through `yy status`.
 
 Managed mounts use generations and invalidation to provide their declared
 multi-client visibility. Direct mounts use storage versions and conditional
@@ -439,7 +435,7 @@ but it does not change the selected Volume or Access Model.
 
 FUSE-compatible libraries and user-mode drivers solve an OS transport problem.
 They do not define storage authority, remote durability, or offline conflict
-semantics. Keeping them as frontends allows ofs to adopt the best supported
+semantics. Keeping them as frontends allows YinYang to adopt the best supported
 mechanism on each platform without changing volume behavior.
 
 ## Direct storage only
@@ -491,7 +487,7 @@ from
 [Cloud Files sync providers](https://learn.microsoft.com/en-us/windows/win32/cfapi/build-a-cloud-file-sync-engine).
 These APIs validate the distinction between presenting a remote view and
 reconciling local files, while their platform-specific contracts reinforce the
-need for shared ofs semantics above the frontend.
+need for shared YinYang semantics above the frontend.
 
 # Unresolved questions
 

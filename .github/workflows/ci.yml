@@ -15,7 +15,7 @@
 # specific language governing permissions and limitations
 # under the License.
 
-name: Ofs CI
+name: Apache OpenDAL™ YinYang CI
 
 on:
   pull_request:
@@ -61,15 +61,15 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     env:
-      OFS_MSRV: "1.91.0"
+      YINYANG_MSRV: "1.91.0"
     steps:
       - uses: actions/checkout@v7
 
       - name: Install Rust MSRV
-        run: rustup toolchain install "$OFS_MSRV"
+        run: rustup toolchain install "$YINYANG_MSRV"
 
       - name: Check with Rust MSRV
-        run: cargo +"$OFS_MSRV" check --workspace --all-targets --locked
+        run: cargo +"$YINYANG_MSRV" check --workspace --all-targets --locked
 
   test:
     name: Test
