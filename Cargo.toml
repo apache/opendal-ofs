@@ -17,9 +17,9 @@
 
 [package]
 categories = ["filesystem"]
-description = "Apache OpenDAL File System"
+description = "Apache OpenDAL™ YinYang"
 keywords = ["storage", "filesystem"]
-name = "ofs"
+name = "yinyang"
 version = "0.0.24"
 
 authors = ["Apache OpenDAL <dev@opendal.apache.org>"]
@@ -38,7 +38,7 @@ resolver = "3"
 edition = "2024"
 homepage = "https://opendal.apache.org/"
 license = "Apache-2.0"
-repository = "https://github.com/apache/opendal-ofs"
+repository = "https://github.com/apache/opendal-yinyang"
 rust-version = "1.91.0"
 
 [workspace.dependencies]

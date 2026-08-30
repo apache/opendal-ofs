@@ -18,8 +18,8 @@
 blank_issues_enabled: true
 contact_links:
   - name: Question
-    url: https://github.com/apache/opendal-ofs/discussions/new?category=q-a
-    about: Ask questions about Apache OpenDAL ofs (opendal-ofs) usage and development.
+    url: https://github.com/apache/opendal-yinyang/discussions/new?category=q-a
+    about: Ask questions about Apache OpenDAL™ YinYang usage and development.
   - name: Discord
     url: https://opendal.apache.org/discord
-    about: Join the Apache OpenDAL Discord for real-time discussions about opendal-ofs.
+    about: Join the Apache OpenDAL Discord for discussions about Apache OpenDAL™ YinYang.

@@ -15,7 +15,7 @@
 // specific language governing permissions and limitations
 // under the License.
 
-//! Apache OpenDAL™ File System.
+//! Apache OpenDAL™ YinYang.
 //!
 //! The filesystem architecture is being redesigned. This crate intentionally
 //! exposes no runtime API until the new contracts are ready for implementation.

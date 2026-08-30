@@ -18,7 +18,7 @@
 # All configurations could be found here: https://github.com/apache/infrastructure-asfyaml/
 
 github:
-  description: "A userspace filesystem backing by Apache OpenDAL."
+  description: "Apache OpenDAL™ YinYang: a cross-platform filesystem foundation."
   homepage: https://opendal.apache.org
   labels:
     - rust

@@ -1,6 +1,6 @@
 # Contributing
 
-Thank you for contributing to Apache OpenDAL™ File System.
+Thank you for contributing to Apache OpenDAL™ YinYang.
 
 ## Set up the repository
 

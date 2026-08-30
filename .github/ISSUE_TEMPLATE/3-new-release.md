@@ -1,10 +1,10 @@
 ---
 name: New Release
 about: Use this template for start making a new release
-title: "Tracking issues of Apache OpenDAL ofs (opendal-ofs) ${opendal_ofs_version} Release"
+title: "Tracking issues of Apache OpenDAL™ YinYang ${yinyang_version} Release"
 ---
 
-This issue is used to track tasks of the Apache OpenDAL ofs (opendal-ofs) ${opendal_ofs_version} release.
+This issue tracks the Apache OpenDAL™ YinYang ${yinyang_version} release.
 
 ## Tasks
 

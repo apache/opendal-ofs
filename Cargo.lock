@@ -117,10 +117,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3eaf3ede3fee6db1a4c2ee091bf8a8b4dccdc6d17f656fb07896ee72867612f2"
 
 [[package]]
-name = "ofs"
-version = "0.0.24"
-
-[[package]]
 name = "once_cell_polyfill"
 version = "1.70.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -204,3 +200,7 @@ dependencies = [
  "clap",
  "which",
 ]
+
+[[package]]
+name = "yinyang"
+version = "0.0.24"
