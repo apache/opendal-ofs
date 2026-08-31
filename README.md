@@ -49,7 +49,7 @@ Apache OpenDAL™ is the ASF project and umbrella brand. Apache OpenDAL™ YinYa
 
 Use the full product name, **Apache OpenDAL™ YinYang**, in titles and first prominent references. Later references may use **YinYang** when the relationship to the Apache OpenDAL project and the ASF remains clear.
 
-Use `yinyang` only for the Cargo package and Rust crate, and use `yy` only for the command-line executable and commands. The former product name **Apache OpenDAL™ File System** and the `ofs` package and executable refer only to historical releases preserved on the [`backup`] branch.
+Use `yinyang` only for the Cargo package and Rust crate, and use `yy` only for the command-line executable and commands.
 
 For more details, see the [Apache Product Name Usage Guide](https://www.apache.org/foundation/marks/guide).
 
