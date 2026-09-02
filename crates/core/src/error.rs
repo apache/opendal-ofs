@@ -23,7 +23,6 @@ pub enum ErrorKind {
     Invalid,
     Corrupt,
     NotFound,
-    Conflict,
     Storage,
 }
 
@@ -62,10 +61,6 @@ impl Error {
 
     pub(crate) fn corrupt(operation: &'static str, message: impl Into<String>) -> Self {
         Self::new(ErrorKind::Corrupt, operation, message)
-    }
-
-    pub(crate) fn conflict(operation: &'static str, message: impl Into<String>) -> Self {
-        Self::new(ErrorKind::Conflict, operation, message)
     }
 }
 

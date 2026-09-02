@@ -15,95 +15,61 @@
 // specific language governing permissions and limitations
 // under the License.
 
-use std::fmt;
-
 use crate::{Error, Result};
 
-macro_rules! identity {
-    ($name:ident, $bytes:literal) => {
-        #[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
-        pub struct $name([u8; $bytes]);
+#[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+pub struct NodeId([u8; 16]);
 
-        impl $name {
-            pub const fn from_bytes(bytes: [u8; $bytes]) -> Self {
-                Self(bytes)
-            }
+impl NodeId {
+    pub const fn from_bytes(bytes: [u8; 16]) -> Self {
+        Self(bytes)
+    }
 
-            pub const fn as_bytes(&self) -> &[u8; $bytes] {
-                &self.0
-            }
-        }
-    };
+    pub const fn as_bytes(&self) -> &[u8; 16] {
+        &self.0
+    }
+
+    pub fn generate() -> Self {
+        Self(*uuid::Uuid::new_v4().as_bytes())
+    }
 }
 
-macro_rules! generated_identity {
-    ($($name:ident),+ $(,)?) => {
-        $(
-            impl $name {
-                pub fn generate() -> Self {
-                    Self::from_bytes(*uuid::Uuid::new_v4().as_bytes())
-                }
-            }
-        )+
-    };
+#[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+pub struct CommitId([u8; 16]);
+
+impl CommitId {
+    pub const fn from_bytes(bytes: [u8; 16]) -> Self {
+        Self(bytes)
+    }
+
+    pub const fn as_bytes(&self) -> &[u8; 16] {
+        &self.0
+    }
+
+    pub fn generate() -> Self {
+        Self(*uuid::Uuid::new_v4().as_bytes())
+    }
 }
 
-identity!(FsId, 16);
-identity!(NodeId, 16);
-identity!(FileVersionId, 16);
-identity!(CommitId, 16);
-identity!(ExtensionId, 16);
-identity!(Digest, 32);
-
-generated_identity!(FsId, NodeId, FileVersionId, CommitId);
-
-macro_rules! display_identity {
-    ($($name:ident),+ $(,)?) => {
-        $(
-            impl fmt::Display for $name {
-                fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
-                    for byte in self.as_bytes() {
-                        write!(formatter, "{byte:02x}")?;
-                    }
-                    Ok(())
-                }
-            }
-        )+
-    };
-}
-
-display_identity!(FsId, NodeId, FileVersionId, CommitId, ExtensionId, Digest);
-
-macro_rules! counter {
-    ($name:ident) => {
-        #[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
-        pub struct $name(u64);
-
-        impl $name {
-            pub const ZERO: Self = Self(0);
-
-            pub const fn from_value(value: u64) -> Self {
-                Self(value)
-            }
-
-            pub const fn value(self) -> u64 {
-                self.0
-            }
-
-            pub fn next(self) -> Result<Self> {
-                self.0
-                    .checked_add(1)
-                    .map(Self)
-                    .ok_or_else(|| Error::corrupt("advance YinYang counter", "counter overflows"))
-            }
-        }
-    };
-}
-
-counter!(Generation);
-counter!(VersionNumber);
-counter!(GcEpoch);
+#[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+pub struct Generation(u64);
 
 impl Generation {
+    pub const ZERO: Self = Self(0);
     pub const FIRST: Self = Self(1);
+
+    pub const fn from_value(value: u64) -> Self {
+        Self(value)
+    }
+
+    pub const fn value(self) -> u64 {
+        self.0
+    }
+
+    pub fn next(self) -> Result<Self> {
+        self.0
+            .checked_add(1)
+            .map(Self)
+            .ok_or_else(|| Error::corrupt("advance YinYang generation", "generation overflows"))
+    }
 }

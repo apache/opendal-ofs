@@ -17,11 +17,12 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::fmt;
+use std::ops::Range;
 
 use unicode_casefold::UnicodeCaseFold as _;
 use unicode_normalization::UnicodeNormalization as _;
 
-use crate::{Digest, Error, FileVersionId, Generation, NodeId, Result};
+use crate::{Error, Generation, NodeId, Result};
 
 const MAX_COMPONENT_BYTES: usize = 255;
 const MAX_PATH_BYTES: usize = 4096;
@@ -45,7 +46,7 @@ impl Path {
         &self.0
     }
 
-    pub fn is_root(&self) -> bool {
+    fn is_root(&self) -> bool {
         self.0.is_empty()
     }
 
@@ -78,17 +79,17 @@ impl fmt::Display for Path {
 /// Stable identity of one logical byte sequence.
 #[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
 pub struct ContentId {
-    digest: Digest,
+    digest: [u8; 32],
     length: u64,
 }
 
 impl ContentId {
-    pub const fn new(digest: Digest, length: u64) -> Self {
+    pub const fn new(digest: [u8; 32], length: u64) -> Self {
         Self { digest, length }
     }
 
-    pub const fn digest(self) -> Digest {
-        self.digest
+    pub const fn digest(&self) -> &[u8; 32] {
+        &self.digest
     }
 
     pub const fn length(self) -> u64 {
@@ -104,15 +105,11 @@ pub struct BlobRef {
 }
 
 impl BlobRef {
-    pub fn new(reference: impl Into<Vec<u8>>, content: ContentId) -> Result<Self> {
-        let reference = reference.into();
-        if reference.is_empty() {
-            return Err(Error::invalid(
-                "construct YinYang blob reference",
-                "blob reference is empty",
-            ));
+    pub fn new(reference: impl Into<Vec<u8>>, content: ContentId) -> Self {
+        Self {
+            reference: reference.into(),
+            content,
         }
-        Ok(Self { reference, content })
     }
 
     pub fn as_bytes(&self) -> &[u8] {
@@ -124,127 +121,64 @@ impl BlobRef {
     }
 }
 
-/// One half-open logical byte range in a file.
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub struct FileRange {
-    offset: u64,
-    length: u64,
-}
-
-impl FileRange {
-    pub fn new(offset: u64, length: u64) -> Result<Self> {
-        if length == 0 || offset.checked_add(length).is_none() {
-            return Err(Error::invalid(
-                "construct YinYang file range",
-                "file range is empty or overflows",
-            ));
-        }
-        Ok(Self { offset, length })
-    }
-
-    pub const fn offset(self) -> u64 {
-        self.offset
-    }
-
-    pub const fn length(self) -> u64 {
-        self.length
-    }
-
-    pub fn end(self) -> Result<u64> {
-        self.offset
-            .checked_add(self.length)
-            .ok_or_else(|| Error::corrupt("read YinYang file range", "file range end overflows"))
-    }
-}
-
-/// Independently verifiable and decodable source bytes.
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub struct FileSource {
-    stored: BlobRef,
-    decoded: Vec<ContentId>,
-}
-
-impl FileSource {
-    pub fn new(stored: BlobRef, decoded: Vec<ContentId>) -> Self {
-        Self { stored, decoded }
-    }
-
-    pub const fn stored(&self) -> &BlobRef {
-        &self.stored
-    }
-
-    pub fn decoded(&self) -> &[ContentId] {
-        &self.decoded
-    }
-
-    pub fn content(&self) -> ContentId {
-        self.decoded
-            .last()
-            .copied()
-            .unwrap_or_else(|| self.stored.content())
-    }
-}
-
-/// Mapping from one logical file range into a source.
+/// Mapping from one logical file range into an immutable blob.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct FilePart {
-    range: FileRange,
-    source_offset: u64,
-    source: FileSource,
+    range: Range<u64>,
+    blob_offset: u64,
+    blob: BlobRef,
 }
 
 impl FilePart {
-    pub fn new(range: FileRange, source_offset: u64, source: FileSource) -> Result<Self> {
-        if source_offset
-            .checked_add(range.length())
-            .is_none_or(|end| end > source.content().length())
+    pub fn new(range: Range<u64>, blob_offset: u64, blob: BlobRef) -> Result<Self> {
+        if range.is_empty() {
+            return Err(Error::invalid(
+                "construct YinYang file part",
+                "file part is empty",
+            ));
+        }
+        let length = range.end - range.start;
+        if blob_offset
+            .checked_add(length)
+            .is_none_or(|end| end > blob.content().length())
         {
             return Err(Error::invalid(
                 "construct YinYang file part",
-                "file part exceeds its source content",
+                "file part exceeds its blob content",
             ));
         }
         Ok(Self {
             range,
-            source_offset,
-            source,
+            blob_offset,
+            blob,
         })
     }
 
-    pub const fn range(&self) -> FileRange {
-        self.range
+    pub const fn range(&self) -> &Range<u64> {
+        &self.range
     }
 
-    pub const fn source_offset(&self) -> u64 {
-        self.source_offset
+    pub const fn blob_offset(&self) -> u64 {
+        self.blob_offset
     }
 
-    pub const fn source(&self) -> &FileSource {
-        &self.source
+    pub const fn blob(&self) -> &BlobRef {
+        &self.blob
     }
 }
 
 /// One published logical file.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct File {
-    version: FileVersionId,
     content: ContentId,
     parts: Vec<FilePart>,
 }
 
 impl File {
-    pub fn new(version: FileVersionId, content: ContentId, parts: Vec<FilePart>) -> Result<Self> {
-        let file = Self {
-            version,
-            content,
-            parts,
-        };
-        file.validate(None)?;
+    pub fn new(content: ContentId, parts: Vec<FilePart>) -> Result<Self> {
+        let file = Self { content, parts };
+        file.validate()?;
         Ok(file)
-    }
-
-    pub const fn version(&self) -> FileVersionId {
-        self.version
     }
 
     pub const fn content(&self) -> ContentId {
@@ -255,7 +189,7 @@ impl File {
         &self.parts
     }
 
-    fn validate(&self, decoding_count: Option<usize>) -> Result<()> {
+    fn validate(&self) -> Result<()> {
         if self.content.length() == 0 {
             if self.parts.is_empty() {
                 return Ok(());
@@ -268,19 +202,13 @@ impl File {
 
         let mut expected_offset = 0;
         for part in &self.parts {
-            if part.range.offset() != expected_offset {
+            if part.range.start != expected_offset {
                 return Err(Error::invalid(
                     "validate YinYang file",
                     "file parts contain a gap or overlap",
                 ));
             }
-            if decoding_count.is_some_and(|count| part.source.decoded.len() != count) {
-                return Err(Error::invalid(
-                    "validate YinYang file",
-                    "file source decoding count does not match the format",
-                ));
-            }
-            expected_offset = part.range.end()?;
+            expected_offset = part.range.end;
         }
         if expected_offset != self.content.length() {
             return Err(Error::invalid(
@@ -292,32 +220,10 @@ impl File {
     }
 }
 
-/// Filesystem attributes owned by one node generation.
-#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
-pub struct NodeAttrs {
-    pub executable: bool,
-}
-
-/// Directory membership state.
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub struct Dir {
-    entries_generation: Generation,
-}
-
-impl Dir {
-    pub const fn new(entries_generation: Generation) -> Self {
-        Self { entries_generation }
-    }
-
-    pub const fn entries_generation(self) -> Generation {
-        self.entries_generation
-    }
-}
-
 /// Node-specific filesystem state.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum NodeBody {
-    Dir(Dir),
+    Dir { entries_generation: Generation },
     File(File),
 }
 
@@ -326,7 +232,7 @@ pub enum NodeBody {
 pub struct Node {
     id: NodeId,
     generation: Generation,
-    attrs: NodeAttrs,
+    executable: bool,
     body: NodeBody,
 }
 
@@ -334,22 +240,22 @@ impl Node {
     pub const fn dir(
         id: NodeId,
         generation: Generation,
-        attrs: NodeAttrs,
+        executable: bool,
         entries_generation: Generation,
     ) -> Self {
         Self {
             id,
             generation,
-            attrs,
-            body: NodeBody::Dir(Dir::new(entries_generation)),
+            executable,
+            body: NodeBody::Dir { entries_generation },
         }
     }
 
-    pub const fn file(id: NodeId, generation: Generation, attrs: NodeAttrs, file: File) -> Self {
+    pub const fn file(id: NodeId, generation: Generation, executable: bool, file: File) -> Self {
         Self {
             id,
             generation,
-            attrs,
+            executable,
             body: NodeBody::File(file),
         }
     }
@@ -362,24 +268,24 @@ impl Node {
         self.generation
     }
 
-    pub const fn attrs(&self) -> NodeAttrs {
-        self.attrs
+    pub const fn executable(&self) -> bool {
+        self.executable
     }
 
     pub const fn body(&self) -> &NodeBody {
         &self.body
     }
 
-    pub const fn dir_body(&self) -> Option<Dir> {
+    const fn dir_generation(&self) -> Option<Generation> {
         match self.body {
-            NodeBody::Dir(dir) => Some(dir),
+            NodeBody::Dir { entries_generation } => Some(entries_generation),
             NodeBody::File(_) => None,
         }
     }
 
-    pub const fn file_body(&self) -> Option<&File> {
+    const fn file_body(&self) -> Option<&File> {
         match &self.body {
-            NodeBody::Dir(_) => None,
+            NodeBody::Dir { .. } => None,
             NodeBody::File(file) => Some(file),
         }
     }
@@ -392,16 +298,11 @@ pub struct Tree {
 }
 
 impl Tree {
-    pub fn genesis(root: NodeId) -> Self {
+    pub(crate) fn genesis(root: NodeId) -> Self {
         Self {
             entries: BTreeMap::from([(
                 Path::root(),
-                Node::dir(
-                    root,
-                    Generation::FIRST,
-                    NodeAttrs::default(),
-                    Generation::FIRST,
-                ),
+                Node::dir(root, Generation::FIRST, false, Generation::FIRST),
             )]),
         }
     }
@@ -437,23 +338,25 @@ impl Tree {
         self.entries.remove(path)
     }
 
-    pub fn len(&self) -> usize {
-        self.entries.len()
-    }
-
-    pub fn is_empty(&self) -> bool {
-        self.entries.is_empty()
-    }
-
-    pub(crate) fn validate(&self, root: NodeId, decoding_count: usize) -> Result<()> {
-        let root_node = self
+    pub(crate) fn root_id(&self) -> Result<NodeId> {
+        let root = self
             .entries
             .get(&Path::root())
             .ok_or_else(|| Error::invalid("validate YinYang tree", "tree root is missing"))?;
-        if root_node.id != root || root_node.dir_body().is_none() {
+        if root.dir_generation().is_none() {
             return Err(Error::invalid(
                 "validate YinYang tree",
-                "tree root does not match the format",
+                "tree root is not a directory",
+            ));
+        }
+        Ok(root.id)
+    }
+
+    pub(crate) fn validate(&self, root: NodeId) -> Result<()> {
+        if self.root_id()? != root {
+            return Err(Error::invalid(
+                "validate YinYang tree",
+                "tree root identity changed",
             ));
         }
 
@@ -471,19 +374,21 @@ impl Tree {
                     "node identity appears at more than one path",
                 ));
             }
-            if let Some(dir) = node.dir_body()
-                && dir.entries_generation() == Generation::ZERO
-            {
+            if node.dir_generation() == Some(Generation::ZERO) {
                 return Err(Error::invalid(
                     "validate YinYang tree",
                     "directory entries generation is zero",
                 ));
             }
             if let Some(file) = node.file_body() {
-                file.validate(Some(decoding_count))?;
+                file.validate()?;
             }
             if let Some(parent) = path.parent()
-                && self.entries.get(&parent).and_then(Node::dir_body).is_none()
+                && self
+                    .entries
+                    .get(&parent)
+                    .and_then(Node::dir_generation)
+                    .is_none()
             {
                 return Err(Error::invalid(
                     "validate YinYang tree",
@@ -495,14 +400,13 @@ impl Tree {
         Ok(())
     }
 
-    pub(crate) fn validate_successor(
-        &self,
-        successor: &Self,
-        root: NodeId,
-        decoding_count: usize,
-    ) -> Result<()> {
-        self.validate(root, decoding_count)?;
-        successor.validate(root, decoding_count)?;
+    pub(crate) fn validate_successor(&self, successor: &Self, root: NodeId) -> Result<()> {
+        if successor.root_id()? != root {
+            return Err(Error::invalid(
+                "validate YinYang tree successor",
+                "tree root identity changed",
+            ));
+        }
 
         let previous_by_id = nodes_by_id(self);
         let successor_by_id = nodes_by_id(successor);
@@ -510,8 +414,8 @@ impl Tree {
             let Some((_, previous)) = previous_by_id.get(id) else {
                 if next.generation != Generation::FIRST
                     || next
-                        .dir_body()
-                        .is_some_and(|dir| dir.entries_generation() != Generation::FIRST)
+                        .dir_generation()
+                        .is_some_and(|generation| generation != Generation::FIRST)
                 {
                     return Err(Error::invalid(
                         "validate YinYang tree successor",
@@ -521,26 +425,17 @@ impl Tree {
                 continue;
             };
 
-            if matches!(previous.body, NodeBody::Dir(_)) != matches!(next.body, NodeBody::Dir(_)) {
+            if matches!(previous.body, NodeBody::Dir { .. })
+                != matches!(next.body, NodeBody::Dir { .. })
+            {
                 return Err(Error::invalid(
                     "validate YinYang tree successor",
                     "node kind changed without a new identity",
                 ));
             }
-            if let (Some(previous_file), Some(next_file)) = (previous.file_body(), next.file_body())
-                && previous_file.version == next_file.version
-                && (previous_file.content != next_file.content
-                    || previous_file.parts != next_file.parts)
-            {
-                return Err(Error::invalid(
-                    "validate YinYang tree successor",
-                    "file content changed without a new file version",
-                ));
-            }
-
-            let payload_changed = previous.attrs != next.attrs
+            let payload_changed = previous.executable != next.executable
                 || match (&previous.body, &next.body) {
-                    (NodeBody::Dir(_), NodeBody::Dir(_)) => false,
+                    (NodeBody::Dir { .. }, NodeBody::Dir { .. }) => false,
                     (NodeBody::File(previous), NodeBody::File(next)) => previous != next,
                     _ => unreachable!("node kind was checked above"),
                 };
@@ -560,22 +455,22 @@ impl Tree {
         let previous_membership = directory_membership(self)?;
         let successor_membership = directory_membership(successor)?;
         for (id, (_, next)) in successor_by_id {
-            let Some(next_dir) = next.dir_body() else {
+            let Some(next_generation) = next.dir_generation() else {
                 continue;
             };
             let Some((_, previous)) = previous_by_id.get(&id) else {
                 continue;
             };
-            let previous_dir = previous
-                .dir_body()
+            let previous_generation = previous
+                .dir_generation()
                 .expect("a stable directory identity remains a directory");
             let changed = previous_membership.get(&id) != successor_membership.get(&id);
             let expected = if changed {
-                previous_dir.entries_generation().next()?
+                previous_generation.next()?
             } else {
-                previous_dir.entries_generation()
+                previous_generation
             };
-            if next_dir.entries_generation() != expected {
+            if next_generation != expected {
                 return Err(Error::invalid(
                     "validate YinYang tree successor",
                     "directory generation does not match its membership change",
@@ -597,7 +492,7 @@ fn directory_membership(tree: &Tree) -> Result<BTreeMap<NodeId, BTreeMap<String,
     let mut membership = tree
         .entries
         .values()
-        .filter_map(|node| node.dir_body().map(|_| (node.id, BTreeMap::new())))
+        .filter_map(|node| node.dir_generation().map(|_| (node.id, BTreeMap::new())))
         .collect::<BTreeMap<_, _>>();
     let mut folded_names = BTreeMap::<NodeId, BTreeSet<String>>::new();
     for (path, node) in &tree.entries {
@@ -607,7 +502,7 @@ fn directory_membership(tree: &Tree) -> Result<BTreeMap<NodeId, BTreeMap<String,
         let parent_id = tree
             .entries
             .get(&parent)
-            .and_then(|node| node.dir_body().map(|_| node.id))
+            .and_then(|node| node.dir_generation().map(|_| node.id))
             .ok_or_else(|| {
                 Error::invalid(
                     "validate YinYang tree",

@@ -17,28 +17,22 @@
 
 use std::future::Future;
 
-use crate::{BlobRef, FsFormat, FsHead, FsVersion, Result};
+use crate::{BlobRef, FsVersion, Result};
 
 /// One head value and the opaque condition required to replace that observation.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct HeadObservation {
-    head: FsHead,
+    version: BlobRef,
     condition: Vec<u8>,
 }
 
 impl HeadObservation {
-    pub fn new(head: FsHead, condition: Vec<u8>) -> Result<Self> {
-        if condition.is_empty() {
-            return Err(crate::Error::invalid(
-                "construct YinYang head observation",
-                "head condition is empty",
-            ));
-        }
-        Ok(Self { head, condition })
+    pub fn new(version: BlobRef, condition: Vec<u8>) -> Self {
+        Self { version, condition }
     }
 
-    pub const fn head(&self) -> &FsHead {
-        &self.head
+    pub const fn version(&self) -> &BlobRef {
+        &self.version
     }
 
     pub fn condition(&self) -> &[u8] {
@@ -47,16 +41,7 @@ impl HeadObservation {
 }
 
 /// Persistent capabilities required by the YinYang Format state machine.
-pub trait FormatStorage: Send + Sync {
-    /// Create the bootstrap record when it does not exist.
-    fn create_format<'a>(
-        &'a self,
-        format: &'a FsFormat,
-    ) -> impl Future<Output = Result<bool>> + Send + 'a;
-
-    /// Read the bootstrap record.
-    fn read_format(&self) -> impl Future<Output = Result<Option<FsFormat>>> + Send + '_;
-
+pub trait Storage: Send + Sync {
     /// Persist one immutable filesystem version and return its verifiable reference.
     fn write_version<'a>(
         &'a self,
@@ -72,8 +57,8 @@ pub trait FormatStorage: Send + Sync {
     /// Create the mutable head when it does not exist.
     fn create_head<'a>(
         &'a self,
-        head: &'a FsHead,
-    ) -> impl Future<Output = Result<bool>> + Send + 'a;
+        version: &'a BlobRef,
+    ) -> impl Future<Output = Result<()>> + Send + 'a;
 
     /// Read the head and a condition bound to the same observed value.
     fn observe_head(&self) -> impl Future<Output = Result<Option<HeadObservation>>> + Send + '_;
@@ -82,6 +67,6 @@ pub trait FormatStorage: Send + Sync {
     fn replace_head<'a>(
         &'a self,
         observed: &'a HeadObservation,
-        next: &'a FsHead,
+        next: &'a BlobRef,
     ) -> impl Future<Output = Result<bool>> + Send + 'a;
 }

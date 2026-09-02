@@ -25,13 +25,8 @@ mod storage;
 mod version;
 
 pub use error::{Error, ErrorKind, Result};
-pub use filesystem::{
-    BlobRef, ContentId, Dir, File, FilePart, FileRange, FileSource, Node, NodeAttrs, NodeBody,
-    Path, Tree,
-};
-pub use identity::{
-    CommitId, Digest, ExtensionId, FileVersionId, FsId, GcEpoch, Generation, NodeId, VersionNumber,
-};
-pub use publication::{CommitOutcome, CreateOptions, Fs, Observation};
-pub use storage::{FormatStorage, HeadObservation};
-pub use version::{Commit, Extension, FsFormat, FsHead, FsVersion, FsVersionRef};
+pub use filesystem::{BlobRef, ContentId, File, FilePart, Node, NodeBody, Path, Tree};
+pub use identity::{CommitId, Generation, NodeId};
+pub use publication::{CommitOutcome, Fs, Observation};
+pub use storage::{HeadObservation, Storage};
+pub use version::FsVersion;
