@@ -31,7 +31,7 @@ repository.workspace = true
 rust-version.workspace = true
 
 [workspace]
-members = [".", "xtask"]
+members = [".", "crates/core", "xtask"]
 resolver = "3"
 
 [workspace.package]
@@ -43,6 +43,9 @@ rust-version = "1.91.0"
 
 [workspace.dependencies]
 clap = { version = "4.6.5", features = ["derive"] }
+unicode-casefold = "0.2"
+unicode-normalization = "0.1"
+uuid = { version = "1", features = ["v4"] }
 which = { version = "8.0.5" }
 
 [workspace.metadata.release]
