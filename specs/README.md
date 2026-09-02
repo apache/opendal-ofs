@@ -3,6 +3,8 @@
 This directory contains the current, maintained contracts for Apache OpenDAL™
 YinYang.
 
+- [YinYang Format core](yinyang-format.md)
+
 A specification describes the currently supported behavior, APIs, wire formats,
 invariants, compatibility rules, and implementation boundaries. Specifications
 evolve with the implementation and must be updated in the same change as the
